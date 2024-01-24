@@ -1,0 +1,10 @@
+[package]
+name = "paysec"
+version = "0.0.1"
+edition = "2021"
+authors = ["David Schmid <david.schmid@mailbox.org>"]
+description = "Library for securing retail payment transactions."
+
+[dependencies]
+hex = "0.4.3"
+soft-aes = "0.1.0"
