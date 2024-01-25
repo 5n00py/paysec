@@ -68,6 +68,92 @@ pub fn encode_pin_field_iso_4(
 
     Ok(pin_field)
 }
+
+/// Decode a PIN from the ISO 9564 format 4 PIN block.
+///
+/// This function decodes a Personal Identification Number (PIN) from a
+/// 16-byte array according to the ISO 9564 format 4 specification. The decoding
+/// process involves verifying the control field, extracting the PIN length and
+/// digits from Binary Coded Decimal (BCD), and checking the padding. It ensures
+/// the integrity of the PIN block structure.
+///
+/// # Parameters
+///
+/// * `pin_field`: A byte slice representing the encoded PIN block. It must be
+///                exactly 16 bytes long.
+///
+/// # Returns
+///
+/// * `Ok(String)` - A string representing the decoded ASCII-encoded PIN.
+/// * `Err(Box<dyn Error>)` - If the PIN block is not 16 bytes long, does not
+///                           adhere to the ISO 9564 format 4 standard, or contains
+///                           invalid data.
+///
+/// # Errors
+///
+/// This function will return an error if:
+/// - The PIN block is not exactly 16 bytes long.
+/// - The control field is not set to the ISO 9564 format 4 standard.
+/// - The PIN length is not between 4 and 12 digits.
+/// - The PIN contains non-numeric digits.
+/// - The filler bytes are not as per the standard.
+pub fn decode_pin_field_iso_4(pin_field: &[u8]) -> Result<String, Box<dyn Error>> {
+    if pin_field.len() != 16 {
+        return Err("PIN BLOCK ISO 4 ERROR: PIN field must be 16 bytes long".into());
+    }
+
+    // Check if the control field is 4 (higher nibble of the first byte)
+    if pin_field[0] >> 4 != 0x4 {
+        return Err(format!(
+            "PIN BLOCK ISO 4 ERROR: PIN block is not ISO format 4: control field `{}`",
+            pin_field[0] >> 4
+        )
+        .into());
+    }
+
+    // Extract PIN length (lower nibble of the first byte)
+    let pin_len = (pin_field[0] & 0x0F) as usize;
+
+    if pin_len < 4 || pin_len > 12 {
+        return Err(format!(
+            "PIN BLOCK ISO 4 ERROR: PIN length must be between 4 and 12: `{}`",
+            pin_len
+        )
+        .into());
+    }
+
+    let mut pin = String::new();
+    for i in 0..pin_len {
+        // Extract each digit from the PIN field
+        let digit = if i % 2 == 0 {
+            pin_field[1 + i / 2] >> 4
+        } else {
+            pin_field[1 + i / 2] & 0x0F
+        };
+
+        if digit > 9 {
+            return Err("PIN BLOCK ISO 4 ERROR: PIN contains invalid digit".into());
+        }
+
+        pin.push_str(&digit.to_string());
+    }
+
+    // Check if the filler is correct (0xA for each unused nibble)
+    for i in pin_len..14 {
+        let filler = if i % 2 == 0 {
+            pin_field[1 + i / 2] >> 4
+        } else {
+            pin_field[1 + i / 2] & 0x0F
+        };
+
+        if filler != 0xA {
+            return Err("PIN BLOCK ISO 4 ERROR: PIN block filler is incorrect".into());
+        }
+    }
+
+    Ok(pin)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -171,5 +257,78 @@ mod tests {
             result.unwrap_err().to_string(),
             "PIN BLOCK ISO 4 ERROR: PIN must be between 4 and 12 digits long"
         );
+    }
+
+    #[test]
+    fn test_decode_pin_field_iso_4_various_pins() {
+        let test_cases = [
+            ("12345", "4512345AAAAAAAAA517F9481BA5275FA"),
+            ("1234567", "471234567AAAAAAACAF92E156B7D4489"),
+            ("12345678", "4812345678AAAAAA424D0369B23E2B4C"),
+            ("12345678901", "4B12345678901AAA9B263A096EA64687"),
+            ("123456789012", "4C123456789012AA8A268C65E92C3B39"),
+        ];
+
+        for (expected_pin, encoded_hex) in test_cases {
+            let encoded_bytes = hex::decode(encoded_hex).unwrap();
+            assert_eq!(
+                decode_pin_field_iso_4(&encoded_bytes).unwrap(),
+                expected_pin,
+                "Failed test for encoded PIN field: {}",
+                encoded_hex
+            );
+        }
+    }
+
+    #[test]
+    fn test_decode_pin_field_iso_4_invalid_length() {
+        let pin_field = vec![0u8; 15]; // Less than 16 bytes
+        assert!(matches!(
+            decode_pin_field_iso_4(&pin_field),
+            Err(e) if e.to_string() == "PIN BLOCK ISO 4 ERROR: PIN field must be 16 bytes long"
+        ));
+    }
+
+    #[test]
+    fn test_decode_pin_field_iso_4_invalid_control_field() {
+        let mut pin_field = vec![0u8; 16];
+        pin_field[0] = 0x30; // Control field not 4
+        assert!(matches!(
+            decode_pin_field_iso_4(&pin_field),
+            Err(e) if e.to_string().contains("PIN block is not ISO format 4: control field")
+        ));
+    }
+
+    #[test]
+    fn test_decode_pin_field_iso_4_invalid_pin_length() {
+        let pin_field = vec![0x40; 16]; // PIN length 0
+        assert!(matches!(
+            decode_pin_field_iso_4(&pin_field),
+            Err(e) if e.to_string().contains("PIN length must be between 4 and 12")
+        ));
+    }
+
+    #[test]
+    fn test_decode_pin_field_iso_4_non_numeric_pin() {
+        let pin_field = vec![
+            0x44, 0xAB, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA,
+            0xAA, 0xAA,
+        ];
+        assert!(matches!(
+            decode_pin_field_iso_4(&pin_field),
+            Err(e) if e.to_string() == "PIN BLOCK ISO 4 ERROR: PIN contains invalid digit"
+        ));
+    }
+
+    #[test]
+    fn test_decode_pin_field_iso_4_invalid_filler() {
+        let pin_field = vec![
+            0x44, 0x12, 0x34, 0x56, 0x78, 0x9A, 0xBC, 0xDE, 0xF0, 0x00, 0x00, 0x00, 0x00, 0x00,
+            0x00, 0x00,
+        ]; // Filler not 0xA
+        assert!(matches!(
+            decode_pin_field_iso_4(&pin_field),
+            Err(e) if e.to_string() == "PIN BLOCK ISO 4 ERROR: PIN block filler is incorrect"
+        ));
     }
 }
