@@ -3,7 +3,7 @@ name = "paysec"
 version = "0.0.1"
 edition = "2021"
 authors = ["David Schmid <david.schmid@mailbox.org>"]
-description = "Library for securing retail payment transactions."
+description = "Rust library related to payment security standards."
 
 [dependencies]
 hex = "0.4.3"
