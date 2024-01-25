@@ -154,6 +154,58 @@ pub fn decode_pin_field_iso_4(pin_field: &[u8]) -> Result<String, Box<dyn Error>
     Ok(pin)
 }
 
+/// Encode a Primary Account Number (PAN) using the ISO 9564 format 4 PAN block.
+///
+/// This function encodes a given Primary Account Number (PAN) into a
+/// 16-byte array according to the ISO 9564 format 4 specification. The encoding
+/// process includes setting a PAN length field and encoding the PAN digits
+/// in Binary Coded Decimal (BCD) format. The encoded PAN is used in conjunction
+/// with the encoded PIN for secure PIN block generation.
+///
+/// # Parameters
+///
+/// * `pan`: A reference to a string slice representing the ASCII-encoded PAN to
+///          be encoded. The PAN must consist of numeric characters only and
+///          have a length between 1 and 19 digits.
+///
+/// # Returns
+///
+/// * `Ok([u8; ISO4_PIN_BLOCK_LENGTH])` - A 16-byte array representing the encoded
+///    PAN block.
+/// * `Err(Box<dyn Error>)` - If the PAN is not within the required length or
+///    contains non-numeric characters.
+///
+/// # Errors
+///
+/// This function will return an error if:
+/// - The PAN length is not between 1 and 19 digits.
+/// - The PAN contains characters that are not numeric digits.
+pub fn encode_pan_field_iso_4(pan: &str) -> Result<[u8; 16], Box<dyn Error>> {
+    // Check PAN length
+    if pan.len() < 1 || pan.len() > 19 || !pan.chars().all(|c| c.is_ascii_digit()) {
+        return Err("PIN BLOCK ISO 4 ERROR: PAN must be between 1 and 19 digits long.".into());
+    }
+
+    let pan_len = if pan.len() > 12 {
+        (pan.len() - 12).to_string()
+    } else {
+        "0".to_string()
+    };
+
+    let pan_padded = left_pad_str(pan, 12, '0');
+
+    let pan_field = pan_len + &pan_padded;
+
+    let pan_field_hex = right_pad_str(&pan_field, 32, '0');
+
+    let pan_bytes = hex::decode(&pan_field_hex)?;
+
+    Ok(pan_bytes
+        .as_slice()
+        .try_into()
+        .expect("Invalid length for conversion"))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -330,5 +382,72 @@ mod tests {
             decode_pin_field_iso_4(&pin_field),
             Err(e) if e.to_string() == "PIN BLOCK ISO 4 ERROR: PIN block filler is incorrect"
         ));
+    }
+
+    #[test]
+    fn test_encode_pan_field_iso_4_various_pans() {
+        let test_cases = [
+            ("1", "00000000000010000000000000000000"),
+            ("12", "00000000000120000000000000000000"),
+            ("123", "00000000001230000000000000000000"),
+            ("1234", "00000000012340000000000000000000"),
+            ("1234567890", "00012345678900000000000000000000"),
+            ("123456789012", "01234567890120000000000000000000"),
+            ("1234567890123", "11234567890123000000000000000000"),
+            ("12345678901234", "21234567890123400000000000000000"),
+            ("123456789012345", "31234567890123450000000000000000"),
+            ("1234567890123456", "41234567890123456000000000000000"),
+            ("12345678901234567", "51234567890123456700000000000000"),
+            ("123456789012345678", "61234567890123456780000000000000"),
+            ("1234567890123456789", "71234567890123456789000000000000"),
+        ];
+
+        for (pan, expected_hex) in test_cases {
+            let expected_result = hex::decode(expected_hex).unwrap();
+
+            // Convert Vec<u8> to [u8; 16]
+            let mut expected_bytes = [0u8; 16];
+            expected_bytes.copy_from_slice(&expected_result);
+
+            assert_eq!(
+                encode_pan_field_iso_4(pan).unwrap(),
+                expected_bytes,
+                "Failed test for PAN: {}",
+                pan
+            );
+        }
+    }
+
+    #[test]
+    fn test_encode_pan_field_iso_4_too_short() {
+        let pan = ""; // Too short
+        let result = encode_pan_field_iso_4(pan);
+        assert!(result.is_err());
+        assert_eq!(
+            result.unwrap_err().to_string(),
+            "PIN BLOCK ISO 4 ERROR: PAN must be between 1 and 19 digits long."
+        );
+    }
+
+    #[test]
+    fn test_encode_pan_field_iso_4_too_long() {
+        let pan = "12345678901234567890"; // Too long
+        let result = encode_pan_field_iso_4(pan);
+        assert!(result.is_err());
+        assert_eq!(
+            result.unwrap_err().to_string(),
+            "PIN BLOCK ISO 4 ERROR: PAN must be between 1 and 19 digits long."
+        );
+    }
+
+    #[test]
+    fn test_encode_pan_field_iso_4_invalid_char() {
+        let pan = "123456789x123456789"; // Too long
+        let result = encode_pan_field_iso_4(pan);
+        assert!(result.is_err());
+        assert_eq!(
+            result.unwrap_err().to_string(),
+            "PIN BLOCK ISO 4 ERROR: PAN must be between 1 and 19 digits long."
+        );
     }
 }
