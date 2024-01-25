@@ -206,6 +206,57 @@ pub fn encode_pan_field_iso_4(pan: &str) -> Result<[u8; 16], Box<dyn Error>> {
         .expect("Invalid length for conversion"))
 }
 
+/// Encipher a PIN block using the ISO 9564 format 4 standard with AES encryption.
+///
+/// This function takes a PIN and PAN, encodes them according to the ISO 9564 format 4
+/// specification, and then encrypts the encoded PIN block. The encryption process binds
+/// the PIN with the PAN, improving security. It allows for optional padding or seeding
+/// for the PIN block generation, providing flexibility for different security and testing
+/// requirements.
+///
+/// # Parameters
+///
+/// * `key`: A byte slice representing the AES encryption key.
+/// * `pin`: A string slice representing the ASCII-encoded PIN to be encrypted.
+/// * `pan`: A string slice representing the ASCII-encoded PAN to be used in the encryption process.
+/// * `rnd_seed`: A byte vector representing the random seed used for padding. It
+///               must be at least 8 bytes long.
+///
+/// # Returns
+///
+/// * `Ok(Vec<u8>)` - A `Vec<u8>` representing the encrypted PIN block.
+/// * `Err(Box<dyn Error>)` - If there are issues with the input data (e.g., incorrect lengths or non-numeric characters)
+///                           or if encryption fails.
+///
+/// # Errors
+///
+/// This function will return an error if:
+/// - The PIN or PAN is not within the required length or contains non-numeric characters.
+/// - The provided padding is not at least 8 bytes long.
+/// - There is a failure in the encryption process.
+pub fn encipher_pinblock_iso_4(
+    key: &[u8],
+    pin: &str,
+    pan: &str,
+    rnd_seed: Vec<u8>,
+) -> Result<Vec<u8>, Box<dyn Error>> {
+    // Step 1: Encode the PIN and PAN fields
+    let pin_field = encode_pin_field_iso_4(pin, rnd_seed)?;
+    let pan_field = encode_pan_field_iso_4(pan)?;
+
+    // Step 2: Encrypt the pin field (intermediate block A)
+    let intermediate_block_a = aes_enc_ecb(&pin_field, key, None)?;
+
+    // Step 3: XOR intermediate block A with PAN field
+    let intermediate_block_b = xor_byte_arrays(&intermediate_block_a, &pan_field)?;
+
+    // Step 4: Encrypt the resulting block (intermediate block B)
+    let encrypted_block = aes_enc_ecb(&intermediate_block_b, key, None)?;
+
+    // Step 5: Return the final encrypted pinblock
+    Ok(encrypted_block)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -449,5 +500,21 @@ mod tests {
             result.unwrap_err().to_string(),
             "PIN BLOCK ISO 4 ERROR: PAN must be between 1 and 19 digits long."
         );
+    }
+
+    #[test]
+    fn test_encipher_pinblock_iso_4_valid() {
+        let key = hex::decode("00112233445566778899AABBCCDDEEFF").expect("Invalid key hex");
+        let pin = "1234";
+        let pan = "1234567890123456789";
+        let expected_pin_block = "28B41FDDD29B743E93124BD8E32D921E";
+
+        let rnd_seed = vec![0xFF; 8];
+
+        let result =
+            encipher_pinblock_iso_4(&key, pin, pan, rnd_seed).expect("Failed to encipher pinblock");
+        let result_hex = hex::encode(result).to_uppercase();
+
+        assert_eq!(result_hex, expected_pin_block);
     }
 }
