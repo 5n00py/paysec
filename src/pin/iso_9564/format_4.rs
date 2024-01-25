@@ -257,6 +257,35 @@ pub fn encipher_pinblock_iso_4(
     Ok(encrypted_block)
 }
 
+pub fn decipher_pinblock_iso_4(
+    key: &[u8],
+    pin_block: &[u8],
+    pan: &str,
+) -> Result<String, Box<dyn Error>> {
+    if pin_block.len() != 16 {
+        return Err(
+            "PIN BLOCK ISO 4 ERROR: Data length must be multiple of AES block size 16".into(),
+        );
+    }
+
+    // Step 1: Decrypt the PIN block (intermediate block B)
+    let intermediate_block_b = aes_dec_ecb(pin_block, key, None)?;
+
+    // Step 2: Encode the PAN
+    let pan_field = encode_pan_field_iso_4(pan)?;
+
+    // Step 3: XOR intermediate block B with PAN field (intermediate block A)
+    let intermediate_block_a = xor_byte_arrays(&intermediate_block_b, &pan_field)?;
+
+    // Step 4: Decrypt intermediate block A to get plaintext PIN field
+    let pin_field = aes_dec_ecb(&intermediate_block_a, key, None)?;
+
+    // Step 5: Decode and extract the PIN from the plaintext PIN field
+    let pin = decode_pin_field_iso_4(&pin_field)?;
+
+    Ok(pin)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -516,5 +545,38 @@ mod tests {
         let result_hex = hex::encode(result).to_uppercase();
 
         assert_eq!(result_hex, expected_pin_block);
+    }
+
+    #[test]
+    fn test_decipher_pinblock_iso_4_various() {
+        let key = hex::decode("00112233445566778899AABBCCDDEEFF").unwrap();
+
+        let test_cases = [
+            (
+                "1234",
+                "1234567890123456",
+                "52DB178C6EDCE52E3A70F7FBC8E9C758",
+            ),
+            (
+                "123456",
+                "123456789012345678",
+                "847A0209C659E4C4A79CA6A2A2217D31",
+            ),
+            (
+                "12345678",
+                "1234567890123456789",
+                "018BFEC8B5EF60181A327AD8325A2BA4",
+            ),
+        ];
+
+        for (expected_pin, pan, encrypted_pin_block_hex) in test_cases {
+            let encrypted_pin_block = hex::decode(encrypted_pin_block_hex).unwrap();
+            let decrypted_pin = decipher_pinblock_iso_4(&key, &encrypted_pin_block, pan)
+                .expect("Failed to decipher pinblock");
+            assert_eq!(
+                decrypted_pin, expected_pin,
+                "Deciphered PIN does not match expected PIN"
+            );
+        }
     }
 }
