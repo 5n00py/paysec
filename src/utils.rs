@@ -75,6 +75,50 @@ pub fn right_pad_str(input: &str, length: usize, padding_char: char) -> String {
     }
 }
 
+/// Transform each nibble of the input bytes to the A-F hexadecimal range.
+///
+/// This function processes each byte in the input slice and transforms its nibbles
+/// (4-bit groups) so that they fall within the hexadecimal range of A (10) to F (15).
+/// It achieves this by adjusting the values of the nibbles to ensure they are
+/// within the desired range. The function is particularly useful in scenarios where
+/// hexadecimal representation strictly requires characters in the A-F range.
+///
+/// # Parameters
+///
+/// * `input`: A slice of bytes (`&[u8]`) to be transformed.
+///
+/// # Returns
+///
+/// A `Vec<u8>` where each byte has its nibbles transformed to the A-F range.
+///
+pub fn transform_nibbles_to_af(input: &[u8]) -> Vec<u8> {
+    let mut output = Vec::with_capacity(input.len());
+
+    for &byte in input {
+        // Process higher nibble
+        let high_nibble = (byte >> 4) & 0x0F;
+        let transformed_high = transform_nibble(high_nibble);
+
+        // Process lower nibble
+        let low_nibble = byte & 0x0F;
+        let transformed_low = transform_nibble(low_nibble);
+
+        // Combine the transformed nibbles back into a byte
+        let output_byte = (transformed_high << 4) | transformed_low;
+        output.push(output_byte);
+    }
+
+    output
+}
+
+fn transform_nibble(nibble: u8) -> u8 {
+    match nibble {
+        0..=5 => nibble + 10, // Transform 0-5 to A-F
+        6..=9 => nibble + 6,  // Transform 6-9 to A-F
+        _ => nibble,          // Keep A-F as is
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -125,5 +169,18 @@ mod tests {
         let length2 = 4;
         let padding_char2 = '-';
         assert_eq!(right_pad_str(input2, length2, padding_char2), input2);
+    }
+
+    #[test]
+    fn test_transform_nibbles_to_af() {
+        let input = vec![0x45, 0x82, 0x1A, 0xBC, 0x09, 0x34];
+        let expected_output = vec![0xEF, 0xEC, 0xBA, 0xBC, 0xAF, 0xDE];
+
+        let result = transform_nibbles_to_af(&input);
+
+        assert_eq!(
+            result, expected_output,
+            "Nibbles were not correctly transformed to A-F range."
+        );
     }
 }
