@@ -140,3 +140,57 @@ pub fn decode_pin_field_iso_3(pin_field: &[u8]) -> Result<String, Box<dyn Error>
 
     Ok(pin)
 }
+
+/// Encode a Primary Account Number (PAN) using the ISO 9564 format 3 PAN field.
+///
+/// This function encodes a given PAN into an 8-byte array as per the ISO 9564 format 3
+/// specification. The encoding involves extracting the last 12 digits of the PAN (excluding the
+/// check digit), and converting these digits into Binary Coded Decimal (BCD) format. The first two
+/// bytes of the 8-byte array are set to zero, and the BCD digits are placed starting from the
+/// third byte.
+///
+/// # Parameters
+///
+/// * `pan`: A reference to a string slice representing the ASCII-encoded PAN to be encoded.
+///          The PAN must consist of numeric characters only and have a length of at least 13 digits
+///          to ensure there are 12 digits excluding the check digit.
+///
+/// # Returns
+///
+/// * `Ok([u8; ISO3_PIN_BLOCK_LENGTH])` - An 8-byte array representing the encoded PAN block.
+/// * `Err(Box<dyn Error>)` - If the PAN is shorter than the required length or contains non-numeric characters.
+///
+/// # Errors
+///
+/// This function will return an error if:
+/// - The PAN is shorter than 13 digits (to ensure at least 12 digits excluding the check digit).
+/// - The PAN contains characters that are not numeric digits.
+pub fn encode_pan_field_iso_3(pan: &str) -> Result<[u8; ISO3_PIN_BLOCK_LENGTH], Box<dyn Error>> {
+    // Ensure PAN length is at least 13 digits (to have 12 digits excluding the check digit)
+    if pan.len() < 13 {
+        return Err(
+            "PIN BLOCK ISO 3 ERROR: PAN must be at least 13 digits long for ISO 3 encoding".into(),
+        );
+    }
+
+    // Extract the last 12 digits of the PAN, excluding the check digit
+    let pan_last_12 = &pan[pan.len() - 13..pan.len() - 1];
+
+    // Initialize pan_field with the first two bytes set to 0
+    let mut pan_field = [0u8; ISO3_PIN_BLOCK_LENGTH];
+
+    // Convert the last 12 digits of PAN to BCD and place into pan_field
+    for (i, digit_char) in pan_last_12.chars().enumerate() {
+        let digit = digit_char.to_digit(10).ok_or("Invalid digit in PAN")? as u8;
+
+        if i % 2 == 0 {
+            // Even index: place digit in the high nibble
+            pan_field[2 + i / 2] = digit << 4;
+        } else {
+            // Odd index: place digit in the low nibble
+            pan_field[2 + i / 2] |= digit;
+        }
+    }
+
+    Ok(pan_field)
+}
