@@ -3,6 +3,106 @@ use std::error::Error;
 
 const ISO3_PIN_BLOCK_LENGTH: usize = 8;
 
+/// Encode a PIN block using the ISO 9564 format 3 standard.
+///
+/// This function takes a PIN and a PAN, encodes them separately according to the ISO 9564 format 3
+/// specification, and then combines them using an XOR operation. The resulting PIN block is a
+/// secure way to bind the PIN with the associated PAN. The function allows for a custom random
+/// seed to be used for generating part of the PIN block.
+///
+/// # Parameters
+///
+/// * `pin`: A reference to a string slice representing the ASCII-encoded PIN to be used in
+///          the PIN block. The PIN must consist of numeric characters only and have a length
+///          between 4 and 12 digits.
+/// * `pan`: A reference to a string slice representing the ASCII-encoded PAN associated with
+///          the PIN. The PAN must consist of numeric characters only and be at least 13 digits long.
+/// * `rnd_seed`: A vector of bytes representing the random seed used for generating part of
+///               the PIN field.
+///
+/// # Returns
+///
+/// * `Ok([u8; ISO3_PIN_BLOCK_LENGTH])` - An 8-byte array representing the encoded PIN block.
+/// * `Err(Box<dyn Error>)` - If there are issues with the input data (e.g., incorrect lengths
+///                           or non-numeric characters), or if the XOR operation fails.
+///
+/// # Errors
+///
+/// This function will return an error if:
+/// - The PIN length is not between 4 and 12 digits.
+/// - The PAN length is less than 13 digits.
+/// - The PIN or PAN contains non-numeric characters.
+/// - The XOR operation fails for any reason.
+///
+/// # Note
+///
+/// This function encodes and combines the PIN and PAN fields but does not encrypt the resulting
+/// PIN block. The encoded PIN block should be encrypted in a separate step using an encryption
+/// algorithm like Triple DES for secure handling and transmission.
+pub fn encode_pinblock_iso_3(
+    pin: &str,
+    pan: &str,
+    rnd_seed: Vec<u8>,
+) -> Result<[u8; ISO3_PIN_BLOCK_LENGTH], Box<dyn Error>> {
+    const ISO3_PIN_BLOCK_LENGTH: usize = 8;
+
+    let pin_field = encode_pin_field_iso_3(&pin, &rnd_seed)?;
+
+    let pan_field = encode_pan_field_iso_3(&pan)?;
+
+    // XOR the pin_field and pan_field
+    let pin_block = xor_byte_arrays(&pin_field, &pan_field)?;
+
+    Ok(pin_block.try_into().unwrap_or_else(|_| {
+        panic!(
+            "Failed to convert the result into an array of length {}",
+            ISO3_PIN_BLOCK_LENGTH
+        )
+    }))
+}
+
+/// Decode a PIN block using the ISO 9564 format 3 standard and extract the PIN.
+///
+/// This function takes an encoded PIN block and a PAN, decodes them separately
+/// according to the ISO 9564 format 3 specification, and then extracts the PIN.
+/// The process involves creating a PAN field, XOR-ing it with the PIN block,
+/// and then decoding the resulting field to extract the PIN.
+///
+/// # Parameters
+///
+/// * `pin_block`: A byte slice representing the encoded PIN block.
+/// * `pan`: A reference to a string slice representing the ASCII-encoded PAN associated with
+///          the PIN. The PAN must consist of numeric characters only and be at least 13 digits long.
+///
+/// # Returns
+///
+/// * `Ok(String)` - A string representing the decoded PIN.
+/// * `Err(Box<dyn Error>)` - If there are issues with the input data or if decoding fails.
+///
+/// # Errors
+///
+/// This function will return an error if:
+/// - The PAN length is less than 13 digits.
+/// - The PAN contains non-numeric characters.
+/// - The decoding process fails for any reason.
+pub fn decode_pinblock_iso_3(pin_block: &[u8], pan: &str) -> Result<String, Box<dyn Error>> {
+    // Ensure the pinblock length is 8 bytes
+    if pin_block.len() != 8 {
+        return Err("PIN BLOCK ISO 3 ERROR: Invalid PIN block length".into());
+    }
+
+    // Create PAN block
+    let pan_field = encode_pan_field_iso_3(pan)?;
+
+    // XOR the pin_block and pan_block
+    let pin_field = xor_byte_arrays(pin_block, &pan_field)?;
+
+    // Decode the pin_field to extract the PIN
+    let pin = decode_pin_field_iso_3(&pin_field)?;
+
+    Ok(pin)
+}
+
 /// Encode a PIN field using the ISO 9564 format 3 PIN block standard.
 ///
 /// This function encodes a given Personal Identification Number (PIN) into an 8-byte array
