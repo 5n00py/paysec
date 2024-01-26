@@ -257,6 +257,31 @@ pub fn encipher_pinblock_iso_4(
     Ok(encrypted_block)
 }
 
+/// Decipher an ISO 9564 format 4 PIN block using AES decryption.
+///
+/// This function decrypts an encrypted PIN block and extracts the original PIN. It
+/// involves several steps including AES decryption, XOR operations with a PAN-encoded
+/// field, and decoding the deciphered PIN field. This process ensures the secure extraction
+/// of the PIN from an encrypted PIN block.
+///
+/// # Parameters
+///
+/// * `key`: A byte slice representing the AES decryption key.
+/// * `pin_block`: A byte slice representing the encrypted PIN block.
+/// * `pan`: A string slice representing the ASCII-encoded PAN used in the original PIN block encryption.
+///
+/// # Returns
+///
+/// * `Ok(String)` - The decoded PIN as a `String`.
+/// * `Err(Box<dyn Error>)` - If the PIN block length is incorrect, if decryption fails, or if the decoded PIN field
+///                           is invalid (e.g., incorrect length, non-numeric characters).
+///
+/// # Errors
+///
+/// This function will return an error if:
+/// - The encrypted PIN block length is not 16 bytes (the AES block size).
+/// - There is a failure in the decryption process.
+/// - The decoded PIN field is invalid (e.g., incorrect length, non-numeric characters).
 pub fn decipher_pinblock_iso_4(
     key: &[u8],
     pin_block: &[u8],
