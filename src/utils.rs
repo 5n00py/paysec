@@ -113,8 +113,8 @@ pub fn transform_nibbles_to_af(input: &[u8]) -> Vec<u8> {
 
 fn transform_nibble(nibble: u8) -> u8 {
     match nibble {
-        0..=5 => nibble + 10, // Transform 0-5 to A-F
-        6..=9 => nibble + 6,  // Transform 6-9 to A-F
+        0..=5 => nibble + 10, // Transform 0-5 to A-E
+        6..=9 => nibble + 6,  // Transform 6-9 to C-F
         _ => nibble,          // Keep A-F as is
     }
 }
