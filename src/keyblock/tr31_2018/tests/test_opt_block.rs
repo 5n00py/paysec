@@ -243,3 +243,36 @@ fn test_export_str_invalid_length() {
         "ERROR TR-31 OPT BLOCK: Length must be greater than 4, indicating uninitialized OptBlock"
     );
 }
+
+#[test]
+fn test_set_id() {
+    let mut opt_block = OptBlock::new_empty();
+    opt_block.set_id("CT").unwrap();
+    assert_eq!(opt_block.id(), "CT");
+
+    let result = opt_block.set_id("XX");
+    assert!(result.is_err());
+}
+
+#[test]
+fn test_set_data_invalid_id_not_set() {
+    let mut opt_block = OptBlock::new_empty();
+    let result = opt_block.set_data("test");
+    assert!(result.is_err());
+    assert_eq!(
+        result.unwrap_err().to_string(),
+        "ERROR TR-31 OPT BLOCK: ID not set (has to be set before data)"
+    );
+}
+
+#[test]
+fn test_append() {
+    let mut block1 = OptBlock::new("CT", "11", None).unwrap();
+    let block2 = OptBlock::new("IK", "22", None).unwrap();
+    let block3 = OptBlock::new("PB", "FF", None).unwrap();
+
+    block1.append(block2);
+    block1.append(block3);
+
+    assert_eq!(block1.export_str().unwrap(), "CT0611IK0622PB06FF");
+}
