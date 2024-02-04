@@ -220,7 +220,7 @@ impl KeyBlockHeader {
     /// # Returns
     ///
     /// A `Result` which is `Ok` if the value is valid, or an `Err` with a boxed error.
-    fn set_version_id(&mut self, value: &str) -> Result<(), Box<dyn Error>> {
+    pub fn set_version_id(&mut self, value: &str) -> Result<(), Box<dyn Error>> {
         if Self::ALLOWED_VERSION_IDS.contains(&value) {
             self.version_id = value.to_string();
 
@@ -281,7 +281,7 @@ impl KeyBlockHeader {
     /// # Returns
     ///
     /// A `Result` which is `Ok` if the value is valid, or an `Err` with a boxed error.
-    fn set_key_usage(&mut self, value: &str) -> Result<(), Box<dyn Error>> {
+    pub fn set_key_usage(&mut self, value: &str) -> Result<(), Box<dyn Error>> {
         if Self::ALLOWED_KEY_USAGES.contains(&value) {
             self.key_usage = value.to_string();
             Ok(())
@@ -310,7 +310,7 @@ impl KeyBlockHeader {
     /// # Returns
     ///
     /// A `Result` which is `Ok` if the value is valid, or an `Err` with a boxed error.
-    fn set_algorithm(&mut self, value: &str) -> Result<(), Box<dyn Error>> {
+    pub fn set_algorithm(&mut self, value: &str) -> Result<(), Box<dyn Error>> {
         if Self::ALLOWED_ALGORITHMS.contains(&value) {
             self.algorithm = value.to_string();
             Ok(())
@@ -339,7 +339,7 @@ impl KeyBlockHeader {
     /// # Returns
     ///
     /// A `Result` which is `Ok` if the value is valid, or an `Err` with a boxed error.
-    fn set_mode_of_use(&mut self, value: &str) -> Result<(), Box<dyn Error>> {
+    pub fn set_mode_of_use(&mut self, value: &str) -> Result<(), Box<dyn Error>> {
         if Self::ALLOWED_MODES_OF_USE.contains(&value) {
             self.mode_of_use = value.to_string();
             Ok(())
@@ -368,7 +368,7 @@ impl KeyBlockHeader {
     /// # Returns
     ///
     /// A `Result` which is `Ok` if the value is valid, or an `Err` with a boxed error.
-    fn set_key_version_number(&mut self, value: &str) -> Result<(), Box<dyn Error>> {
+    pub fn set_key_version_number(&mut self, value: &str) -> Result<(), Box<dyn Error>> {
         if value.len() != 2 {
             return Err(Box::<dyn Error>::from(format!(
                 "ERROR TR-31 HEADER: Key version number must consist of 2 ASCII characters: {}",
@@ -431,7 +431,7 @@ impl KeyBlockHeader {
     /// # Returns
     ///
     /// A `Result` which is `Ok` if the value is valid, or an `Err` with a boxed error.
-    fn set_num_optional_blocks(&mut self, value: u8) -> Result<(), Box<dyn Error>> {
+    pub fn set_num_optional_blocks(&mut self, value: u8) -> Result<(), Box<dyn Error>> {
         if value > 99 {
             return Err(Box::<dyn Error>::from(
                 "ERROR TR-31 HEADER: Number of opt blocks value is too large",
@@ -473,5 +473,15 @@ impl KeyBlockHeader {
     /// Get the value of the reserved field in the key block header.
     pub fn reserved_field(&self) -> &str {
         &self.reserved_field
+    }
+
+    /// Get a reference to the optional blocks.
+    pub fn opt_blocks(&self) -> &Option<Box<OptBlock>> {
+        &self.opt_blocks
+    }
+
+    /// Get the value of the header length
+    pub fn header_length(&self) -> usize {
+        self.header_length
     }
 }
