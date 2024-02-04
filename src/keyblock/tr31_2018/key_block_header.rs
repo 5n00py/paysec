@@ -207,6 +207,63 @@ impl KeyBlockHeader {
         Ok(header)
     }
 
+    /// Export the `KeyBlockHeader` as a string representation.
+    ///
+    /// This function constructs a string that represents the key block header,
+    /// adhering to the TR-31 standard. It validates that all fields of the header
+    /// are properly assigned and not empty (except `num_opt_blocks`, which can be zero),
+    /// and then formats each field into a string. The `kb_length` is formatted as
+    /// a four-character string (e.g., "0160"), and `num_opt_blocks` is formatted as
+    /// a two-character decimal string (e.g., "02"). If present, optional blocks are
+    /// serialized and appended to the header string using their `export_str` method.
+    ///
+    /// # Returns
+    ///
+    /// A `Result` containing the string representation of the key block header.
+    /// If any field is empty or `kb_length` is zero, or if an error occurs while
+    /// exporting optional blocks, an error is returned as a boxed error.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if any field in the header is empty or if `kb_length` is zero.
+    /// Also returns an error if there is a failure in exporting the optional blocks.
+    pub fn export_str(&self) -> Result<String, Box<dyn Error>> {
+        // Check for empty fields or zero length
+        if self.version_id.is_empty()
+            || self.key_usage.is_empty()
+            || self.algorithm.is_empty()
+            || self.mode_of_use.is_empty()
+            || self.key_version_number.is_empty()
+            || self.exportability.is_empty()
+            || self.reserved_field.is_empty()
+            || self.kb_length == 0
+        {
+            return Err(
+                "ERROR TR-31 HEADER: Export failed due to empty field(s) or zero length".into(),
+            );
+        }
+
+        let mut header_str = String::new();
+
+        // Append each field to the header string
+        header_str.push_str(&self.version_id());
+        header_str.push_str(&format!("{:04}", self.kb_length()));
+        header_str.push_str(&self.key_usage());
+        header_str.push_str(&self.algorithm());
+        header_str.push_str(&self.mode_of_use());
+        header_str.push_str(&self.key_version_number());
+        header_str.push_str(&self.exportability());
+        header_str.push_str(&format!("{:02}", self.num_opt_blocks));
+        header_str.push_str(&self.reserved_field());
+
+        // Append optional blocks if present
+        if let Some(ref opt_blocks) = self.opt_blocks {
+            header_str.push_str(&opt_blocks.export_str()?);
+        }
+
+        Ok(header_str)
+    }
+
     /// Set the version ID of the key block header.
     ///
     /// Validates the version ID against allowed values and sets the

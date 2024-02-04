@@ -172,6 +172,45 @@ fn test_new_from_str_invalid_header_length_with_optional_blocks() {
 }
 
 #[test]
+fn test_export_str_with_values() {
+    let mut header = KeyBlockHeader::new_with_values("B", "B1", "D", "S", "01", "E").unwrap();
+
+    // Setting kb_length to a value of 100. This needs to be formatted as "0100" in the final string.
+    header.set_kb_length(100).unwrap();
+
+    // Call export_str and unwrap the result
+    let header_str = header.export_str().unwrap();
+
+    // The expected output should be "B0100B1DS01E0000" based on the provided values
+    // and the formatted kb_length as "0100"
+    assert_eq!(header_str, "B0100B1DS01E0000");
+}
+
+#[test]
+fn test_export_str_from_string() {
+    let header = KeyBlockHeader::new_from_str("B0160B1DB00N0000").unwrap();
+    let header_str = header.export_str().unwrap();
+    assert_eq!(header_str, "B0160B1DB00N0000"); // Expected output should match the input string
+}
+
+#[test]
+fn test_export_str_with_optional_blocks() {
+    let header = KeyBlockHeader::new_from_str("B0160B1DB00N0100CT0C11223344").unwrap();
+    let header_str = header.export_str().unwrap();
+    assert_eq!(header_str, "B0160B1DB00N0100CT0C11223344"); // Expected output with an optional block
+}
+
+#[test]
+fn test_export_str_empty_header_error() {
+    let header = KeyBlockHeader::new_empty();
+    let result = header.export_str();
+    assert!(
+        result.is_err(),
+        "Exporting an empty header should result in an error"
+    );
+}
+
+#[test]
 fn test_set_version_id() {
     let mut header = KeyBlockHeader::new_empty();
     header.set_version_id("B").unwrap();
