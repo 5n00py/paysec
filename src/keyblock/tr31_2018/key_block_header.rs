@@ -1,4 +1,4 @@
-//use super::opt_block::OptBlock;
+use super::opt_block::OptBlock;
 
 /// Represents the header of a TR-31 Key Block.
 ///
@@ -78,7 +78,7 @@ impl KeyBlockHeader {
     ///
     /// Initializes all string fields to empty strings, numerical fields to zero,
     /// and sets `opt_blocks` to `None`.
-    fn new_empty() -> Self {
+    pub fn new_empty() -> Self {
         Self {
             version_id: String::new(),
             kb_length: 0,
@@ -91,7 +91,7 @@ impl KeyBlockHeader {
             reserved_field: "00".to_string(),
             opt_blocks: None,
 
-            total_length: 0,
+            header_length: 0,
             enc_block_size: 0,
         }
     }
@@ -122,7 +122,7 @@ impl KeyBlockHeader {
         key_version_number: &str,
         exportability: &str,
     ) -> Result<Self, String> {
-        let mut header = Header::new_empty();
+        let mut header = KeyBlockHeader::new_empty();
         header.set_version_id(version_id)?;
         header.set_key_usage(key_usage)?;
         header.set_algorithm(algorithm)?;
@@ -130,7 +130,7 @@ impl KeyBlockHeader {
         header.set_key_version_number(key_version_number)?;
         header.set_exportability(exportability)?;
 
-        header.total_length = 16;
+        header.header_length = 16;
 
         Ok(header)
     }
@@ -175,7 +175,7 @@ impl KeyBlockHeader {
         header.set_num_optional_blocks(num_optional_blocks)?;
         header.set_reserved_field(&reserved_field)?;
 
-        header.total_length = 16;
+        header.header_length = 16;
 
         if num_optional_blocks > 0 && header_str.len() < 20 {
             return Err(String::from(
@@ -195,7 +195,7 @@ impl KeyBlockHeader {
             }
 
             header.opt_blocks = Some(Box::new(opt_block_res.unwrap()));
-            header.total_length += header.opt_blocks.as_ref().unwrap().total_length();
+            header.header_length += header.opt_blocks.as_ref().unwrap().total_length();
         }
 
         Ok(header)
@@ -415,7 +415,7 @@ impl KeyBlockHeader {
     }
 
     /// Get the number of optional blocks in the key block header.
-    fn num_optional_blocks(&self) -> u8 {
+    pub fn num_optional_blocks(&self) -> u8 {
         self.num_opt_blocks
     }
 
