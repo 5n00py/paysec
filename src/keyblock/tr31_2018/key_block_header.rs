@@ -1,5 +1,7 @@
 use super::opt_block::OptBlock;
 
+use std::error::Error;
+
 /// Represents the header of a TR-31 Key Block.
 ///
 /// The `KeyBlockHeader` struct encapsulates all the necessary information
@@ -112,8 +114,7 @@ impl KeyBlockHeader {
     ///
     /// # Returns
     ///
-    /// A `Result` which is `Ok` with the new `KeyBlockHeader` or an `Err` with
-    /// a string describing the issue.
+    /// A `Result` which is `Ok` with the new `KeyBlockHeader`, or an `Err` with a boxed error.
     pub fn new_with_values(
         version_id: &str,
         key_usage: &str,
@@ -121,7 +122,7 @@ impl KeyBlockHeader {
         mode_of_use: &str,
         key_version_number: &str,
         exportability: &str,
-    ) -> Result<Self, String> {
+    ) -> Result<Self, Box<dyn Error>> {
         let mut header = KeyBlockHeader::new_empty();
         header.set_version_id(version_id)?;
         header.set_key_usage(key_usage)?;
@@ -137,8 +138,8 @@ impl KeyBlockHeader {
 
     /// Parse a `KeyBlockHeader` from a string representation.
     ///
-    /// Extracts values for each field from the string and initializes the header.
-    /// Validates the length of the string and each field value. Optionally parses
+    /// This function extracts values for each field from the string and initializes the header.
+    /// It validates the length of the string and each field value. Optionally, it parses
     /// and includes optional blocks if present.
     ///
     /// # Arguments
@@ -147,21 +148,27 @@ impl KeyBlockHeader {
     ///
     /// # Returns
     ///
-    /// A `Result` which is `Ok` with the new `KeyBlockHeader` or an `Err` with
-    /// a string describing the issue.
-    pub fn new_from_str(header_str: &str) -> Result<Self, String> {
+    /// A `Result` which is `Ok` with a new `KeyBlockHeader` if parsing is successful,
+    /// or an `Err` containing a boxed error describing the issue.
+    pub fn new_from_str(header_str: &str) -> Result<Self, Box<dyn Error>> {
         if header_str.len() < 16 {
-            return Err(String::from("ERROR TR-31 HEADER: Invalid data length"));
+            return Err(Box::<dyn Error>::from(
+                "ERROR TR-31 HEADER: Invalid data length",
+            ));
         }
 
         let version_id = header_str[0..1].to_string();
-        let kb_length = header_str[1..5].parse::<u16>().unwrap();
+        let kb_length = header_str[1..5]
+            .parse::<u16>()
+            .map_err(|_| Box::<dyn Error>::from("ERROR TR-31 HEADER: Invalid key block length"))?;
         let key_usage = header_str[5..7].to_string();
         let algorithm = header_str[7..8].to_string();
         let mode_of_use = header_str[8..9].to_string();
         let key_version_number = header_str[9..11].to_string();
         let exportability = header_str[11..12].to_string();
-        let num_optional_blocks = header_str[12..14].parse::<u8>().unwrap();
+        let num_optional_blocks = header_str[12..14].parse::<u8>().map_err(|_| {
+            Box::<dyn Error>::from("ERROR TR-31 HEADER: Invalid number of optional blocks")
+        })?;
         let reserved_field = header_str[14..16].to_string();
 
         let mut header = Self::new_empty();
@@ -178,9 +185,9 @@ impl KeyBlockHeader {
         header.header_length = 16;
 
         if num_optional_blocks > 0 && header_str.len() < 20 {
-            return Err(String::from(
-                "ERROR TR-31 HEADER: Invalid header length containing optional blocks",
-            ));
+            return Err(
+                "ERROR TR-31 HEADER: Invalid header length containing optional blocks".into(),
+            );
         }
 
         if num_optional_blocks > 0 {
@@ -188,10 +195,9 @@ impl KeyBlockHeader {
             let opt_block_res = OptBlock::new_from_str(opt_block_str, num_optional_blocks as usize);
 
             if let Err(e) = opt_block_res {
-                return Err(format!(
-                    "ERROR TR-31 HEADER: Failed to parse optional blocks: {}",
-                    e
-                ));
+                return Err(
+                    format!("ERROR TR-31 HEADER: Failed to parse optional blocks: {}", e).into(),
+                );
             }
 
             header.opt_blocks = Some(Box::new(opt_block_res.unwrap()));
@@ -204,7 +210,8 @@ impl KeyBlockHeader {
     /// Set the version ID of the key block header.
     ///
     /// Validates the version ID against allowed values and sets the
-    /// encryption block size based on the version ID.
+    /// encryption block size based on the version ID. If the provided
+    /// version ID is not allowed, returns an error.
     ///
     /// # Arguments
     ///
@@ -212,8 +219,8 @@ impl KeyBlockHeader {
     ///
     /// # Returns
     ///
-    /// A `Result` which is `Ok` if the value is valid, or an `Err` with an error message.
-    fn set_version_id(&mut self, value: &str) -> Result<(), String> {
+    /// A `Result` which is `Ok` if the value is valid, or an `Err` with a boxed error.
+    fn set_version_id(&mut self, value: &str) -> Result<(), Box<dyn Error>> {
         if Self::ALLOWED_VERSION_IDS.contains(&value) {
             self.version_id = value.to_string();
 
@@ -222,7 +229,10 @@ impl KeyBlockHeader {
 
             Ok(())
         } else {
-            Err(format!("ERROR TR-31 HEADER: Invalid version ID: {}", value))
+            Err(Box::<dyn Error>::from(format!(
+                "ERROR TR-31 HEADER: Invalid version ID: {}",
+                value
+            )))
         }
     }
 
@@ -234,6 +244,7 @@ impl KeyBlockHeader {
     /// Set the key block length.
     ///
     /// Validates the length to ensure it does not exceed the maximum allowed value.
+    /// If the length is invalid, returns an error.
     ///
     /// # Arguments
     ///
@@ -241,10 +252,12 @@ impl KeyBlockHeader {
     ///
     /// # Returns
     ///
-    /// A `Result` which is `Ok` if the length is valid, or an `Err` with an error message.
-    pub fn set_kb_length(&mut self, value: u16) -> Result<(), String> {
+    /// A `Result` which is `Ok` if the length is valid, or an `Err` with a boxed error.
+    pub fn set_kb_length(&mut self, value: u16) -> Result<(), Box<dyn Error>> {
         if value > 9999 {
-            Err("ERROR TR-31 HEADER: Invalid key block length".to_string())
+            Err(Box::<dyn Error>::from(
+                "ERROR TR-31 HEADER: Invalid key block length",
+            ))
         } else {
             self.kb_length = value;
             Ok(())
@@ -258,7 +271,8 @@ impl KeyBlockHeader {
 
     /// Set the key usage of the key block header.
     ///
-    /// Validates the key usage against allowed values.
+    /// Validates the key usage against allowed values. If the provided key usage is not
+    /// allowed, returns an error.
     ///
     /// # Arguments
     ///
@@ -266,13 +280,16 @@ impl KeyBlockHeader {
     ///
     /// # Returns
     ///
-    /// A `Result` which is `Ok` if the value is valid, or an `Err` with an error message.
-    fn set_key_usage(&mut self, value: &str) -> Result<(), String> {
+    /// A `Result` which is `Ok` if the value is valid, or an `Err` with a boxed error.
+    fn set_key_usage(&mut self, value: &str) -> Result<(), Box<dyn Error>> {
         if Self::ALLOWED_KEY_USAGES.contains(&value) {
             self.key_usage = value.to_string();
             Ok(())
         } else {
-            Err(format!("ERROR TR-31 HEADER: Invalid key usage: {}", value))
+            Err(Box::<dyn Error>::from(format!(
+                "ERROR TR-31 HEADER: Invalid key usage: {}",
+                value
+            )))
         }
     }
 
@@ -283,7 +300,8 @@ impl KeyBlockHeader {
 
     /// Set the algorithm of the key block header.
     ///
-    /// Validates the algorithm against allowed values.
+    /// Validates the algorithm against allowed values. If the provided algorithm is not
+    /// allowed, returns an error.
     ///
     /// # Arguments
     ///
@@ -291,13 +309,16 @@ impl KeyBlockHeader {
     ///
     /// # Returns
     ///
-    /// A `Result` which is `Ok` if the value is valid, or an `Err` with an error message.
-    fn set_algorithm(&mut self, value: &str) -> Result<(), String> {
+    /// A `Result` which is `Ok` if the value is valid, or an `Err` with a boxed error.
+    fn set_algorithm(&mut self, value: &str) -> Result<(), Box<dyn Error>> {
         if Self::ALLOWED_ALGORITHMS.contains(&value) {
             self.algorithm = value.to_string();
             Ok(())
         } else {
-            Err(format!("ERROR TR-31 HEADER: Invalid algorithm: {}", value))
+            Err(Box::<dyn Error>::from(format!(
+                "ERROR TR-31 HEADER: Invalid algorithm: {}",
+                value
+            )))
         }
     }
 
@@ -308,7 +329,8 @@ impl KeyBlockHeader {
 
     /// Set the mode of use for the key block header.
     ///
-    /// Validates the mode of use against allowed values.
+    /// Validates the mode of use against allowed values. If the provided mode of use is not
+    /// allowed, returns an error.
     ///
     /// # Arguments
     ///
@@ -316,16 +338,16 @@ impl KeyBlockHeader {
     ///
     /// # Returns
     ///
-    /// A `Result` which is `Ok` if the value is valid, or an `Err` with an error message.
-    fn set_mode_of_use(&mut self, value: &str) -> Result<(), String> {
+    /// A `Result` which is `Ok` if the value is valid, or an `Err` with a boxed error.
+    fn set_mode_of_use(&mut self, value: &str) -> Result<(), Box<dyn Error>> {
         if Self::ALLOWED_MODES_OF_USE.contains(&value) {
             self.mode_of_use = value.to_string();
             Ok(())
         } else {
-            Err(format!(
+            Err(Box::<dyn Error>::from(format!(
                 "ERROR TR-31 HEADER: Invalid mode of use: {}",
                 value
-            ))
+            )))
         }
     }
 
@@ -336,7 +358,8 @@ impl KeyBlockHeader {
 
     /// Set the key version number of the key block header.
     ///
-    /// Validates that the key version number consists of 2 ASCII characters.
+    /// Validates that the key version number consists of 2 ASCII characters. If the provided key version
+    /// number is invalid, returns an error.
     ///
     /// # Arguments
     ///
@@ -344,19 +367,19 @@ impl KeyBlockHeader {
     ///
     /// # Returns
     ///
-    /// A `Result` which is `Ok` if the value is valid, or an `Err` with an error message.
-    fn set_key_version_number(&mut self, value: &str) -> Result<(), String> {
+    /// A `Result` which is `Ok` if the value is valid, or an `Err` with a boxed error.
+    fn set_key_version_number(&mut self, value: &str) -> Result<(), Box<dyn Error>> {
         if value.len() != 2 {
-            return Err(format!(
+            return Err(Box::<dyn Error>::from(format!(
                 "ERROR TR-31 HEADER: Key version number must consist of 2 ASCII characters: {}",
                 value
-            ));
+            )));
         }
         if !value.chars().all(|c| c.is_ascii()) {
-            return Err(format!(
+            return Err(Box::<dyn Error>::from(format!(
                 "ERROR TR-31 HEADER: Key version number must consist of ASCII characters: {}",
                 value
-            ));
+            )));
         }
         self.key_version_number = value.to_string();
         Ok(())
@@ -369,7 +392,8 @@ impl KeyBlockHeader {
 
     /// Set the exportability of the key block header.
     ///
-    /// Validates the exportability against allowed values.
+    /// Validates the exportability against allowed values. If the provided exportability is not
+    /// allowed, returns an error.
     ///
     /// # Arguments
     ///
@@ -377,16 +401,16 @@ impl KeyBlockHeader {
     ///
     /// # Returns
     ///
-    /// A `Result` which is `Ok` if the value is valid, or an `Err` with an error message.
-    pub fn set_exportability(&mut self, value: &str) -> Result<(), String> {
+    /// A `Result` which is `Ok` if the value is valid, or an `Err` with a boxed error.
+    pub fn set_exportability(&mut self, value: &str) -> Result<(), Box<dyn Error>> {
         if Self::ALLOWED_EXPORTABILITIES.contains(&value) {
             self.exportability = value.to_string();
             Ok(())
         } else {
-            Err(format!(
+            Err(Box::<dyn Error>::from(format!(
                 "ERROR TR-31 HEADER: Invalid exportability: {}",
                 value
-            ))
+            )))
         }
     }
 
@@ -397,7 +421,8 @@ impl KeyBlockHeader {
 
     /// Set the number of optional blocks in the key block header.
     ///
-    /// Validates that the number does not exceed the maximum limit.
+    /// Validates that the number does not exceed the maximum limit. If the provided number
+    /// of optional blocks is invalid, returns an error.
     ///
     /// # Arguments
     ///
@@ -405,10 +430,12 @@ impl KeyBlockHeader {
     ///
     /// # Returns
     ///
-    /// A `Result` which is `Ok` if the value is valid, or an `Err` with an error message.
-    fn set_num_optional_blocks(&mut self, value: u8) -> Result<(), String> {
+    /// A `Result` which is `Ok` if the value is valid, or an `Err` with a boxed error.
+    fn set_num_optional_blocks(&mut self, value: u8) -> Result<(), Box<dyn Error>> {
         if value > 99 {
-            return Err("ERROR TR-31 HEADER: Number of opt blocks value is too large".to_string());
+            return Err(Box::<dyn Error>::from(
+                "ERROR TR-31 HEADER: Number of opt blocks value is too large",
+            ));
         }
         self.num_opt_blocks = value;
         Ok(())
@@ -421,7 +448,8 @@ impl KeyBlockHeader {
 
     /// Set the value for the reserved field in the key block header.
     ///
-    /// Validates that the reserved field is set to the correct value.
+    /// Validates that the reserved field is set to the correct value, which should be "00".
+    /// If the provided value is invalid, returns an error.
     ///
     /// # Arguments
     ///
@@ -429,16 +457,16 @@ impl KeyBlockHeader {
     ///
     /// # Returns
     ///
-    /// A `Result` which is `Ok` if the value is valid, or an `Err` with an error message.
-    pub fn set_reserved_field(&mut self, value: &str) -> Result<(), String> {
+    /// A `Result` which is `Ok` if the value is valid, or an `Err` with a boxed error.
+    pub fn set_reserved_field(&mut self, value: &str) -> Result<(), Box<dyn Error>> {
         if value == "00" {
             self.reserved_field = value.to_string();
             Ok(())
         } else {
-            return Err(format!(
+            return Err(Box::<dyn Error>::from(format!(
                 "ERROR TR-31 HEADER: Invalid value for reserved field: {}",
                 value.to_string()
-            ));
+            )));
         }
     }
 
