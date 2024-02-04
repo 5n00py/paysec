@@ -159,6 +159,19 @@ fn test_new_from_str_failed_to_parse_optional_blocks() {
 }
 
 #[test]
+fn test_new_from_str_invalid_header_length_with_optional_blocks() {
+    let header_str = "B0016B1DB00N0100";
+
+    match KeyBlockHeader::new_from_str(header_str) {
+        Err(e) => assert_eq!(
+            e.to_string(),
+            "ERROR TR-31 HEADER: Invalid header length containing optional blocks"
+        ),
+        Ok(_) => panic!("Expected an error due to inconsistent header length, but got Ok"),
+    }
+}
+
+#[test]
 fn test_set_version_id() {
     let mut header = KeyBlockHeader::new_empty();
     header.set_version_id("B").unwrap();
@@ -250,6 +263,23 @@ fn test_set_key_version_number() {
 }
 
 #[test]
+fn test_set_key_version_number_non_ascii_error() {
+    let mut header = KeyBlockHeader::new_empty();
+    let non_ascii_value = "ÿ";
+
+    match header.set_key_version_number(non_ascii_value) {
+        Err(e) => assert_eq!(
+            e.to_string(),
+            format!(
+                "ERROR TR-31 HEADER: Key version number must consist of ASCII characters: {}",
+                non_ascii_value
+            )
+        ),
+        Ok(_) => panic!("Expected an error for non-ASCII key version number, but got Ok"),
+    }
+}
+
+#[test]
 fn test_set_exportability() {
     let mut header = KeyBlockHeader::new_empty();
     header.set_exportability("N").unwrap();
@@ -289,4 +319,21 @@ fn test_set_reserved_field() {
         result.err().unwrap().to_string(),
         "ERROR TR-31 HEADER: Invalid value for reserved field: 01"
     );
+}
+
+#[test]
+fn test_set_reserved_field_invalid_value_error() {
+    let mut header = KeyBlockHeader::new_empty();
+    let invalid_value = "01"; // An example of an invalid value
+
+    match header.set_reserved_field(invalid_value) {
+        Err(e) => assert_eq!(
+            e.to_string(),
+            format!(
+                "ERROR TR-31 HEADER: Invalid value for reserved field: {}",
+                invalid_value
+            )
+        ),
+        Ok(_) => panic!("Expected an error for invalid reserved field value, but got Ok"),
+    }
 }
