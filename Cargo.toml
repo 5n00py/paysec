@@ -9,4 +9,4 @@ repository = "https://github.com/5n00py/paysec"
 
 [dependencies]
 hex = "0.4.3"
-soft-aes = "0.1.0"
+soft-aes = "0.2.2"
