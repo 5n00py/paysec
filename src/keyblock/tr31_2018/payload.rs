@@ -1,8 +1,6 @@
 use std::cmp::max;
 use std::error::Error;
 
-const TR31_MAX_KEY_LENGTH: usize = 32; // Define the maximum key length
-
 /// Constructs the payload for a TR-31 key block.
 ///
 /// This function creates the payload to be encrypted in a TR-31 key block.
