@@ -46,3 +46,19 @@ fn test_derive_keys_version_d_aes_256() {
         hex_decode("095DF0DCA65DC922BBEB015F8C855E254FD7CF399B6DA726ABA28206C9A7A3E2").unwrap()
     );
 }
+
+#[test]
+fn test_derive_keys_version_d_a7422() {
+    let kbpk =
+        hex_decode("88E1AB2A2E3DD38C1FA039A536500CC8A87AB9D62DC92C01058FA79F44657DE6").unwrap();
+    let (kbek, kbak) = derive_keys_version_d(&kbpk).unwrap();
+
+    assert_eq!(
+        kbek,
+        hex_decode("396C9382A6E2E66A088774E1D6E46541F5EAD67D7204F8DD0D7AE8FDA334D3AC").unwrap()
+    );
+    assert_eq!(
+        kbak,
+        hex_decode("4EF24317696213840451890756757E573E0673483888F9B7F9B7517827F95022").unwrap()
+    );
+}
