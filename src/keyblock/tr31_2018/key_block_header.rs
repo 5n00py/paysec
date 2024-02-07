@@ -1,3 +1,70 @@
+//! Module for TR-31 Key Block Headers.
+//!
+//! This module provides the `KeyBlockHeader` struct, essential for constructing and interpreting
+//! TR-31 key blocks. A TR-31 key block is a standardized format for secure exchange and storage of
+//! cryptographic keys. The header of a key block contains attribute information about the key,
+//! using uppercase ASCII printable characters for better supportability and human readability. The
+//! encoding and acceptable characters for each field are defined individually, as outlined in
+//! TR-31 specification.
+//!
+//! # Key Features
+//! - **Key Block Version ID**: Identifies the key block version, defining its cryptographic
+//!   protection method and content layout. Different versions (A, B, C, D) have specific protection methods.
+//! - **Key Block Length**: Specifies the total length of the key block in ASCII numeric digits, including
+//!   the header, encrypted data, and MAC.
+//! - **Key Usage**: Indicates the function of the protected key or sensitive data, with values defined in the standard.
+//! - **Algorithm**: Details the approved algorithm for which the protected key may be used.
+//! - **Mode of Use**: Defines permissible operations with the protected key.
+//! - **Key Version Number**: Optional two-digit ASCII version number for key management purposes.
+//! - **Exportability**: Indicates the transferability of the protected key outside its cryptographic domain.
+//! - **Number of Optional Blocks**: Defines the number of included Optional Blocks in the key block.
+//! - **Reserved Field**: Reserved for future use, currently filled with ASCII zero characters.
+//! - **Optional Blocks**: Supports additional data segments for flexibility and extensibility.
+//!
+//! # Key Header Fields as defined in TR-31 Specification Page 15ff.
+//! - **Byte 0**: Key Block Version ID (1AN, Encrypted: No)
+//! - **Bytes 1-4**: Key Block Length (4N, Encrypted: No)
+//! - **Bytes 5-6**: Key Usage (2AN, Encrypted: No)
+//! - **Byte 7**: Algorithm (1AN, Encrypted: No)
+//! - **Byte 8**: Mode of Use (1AN, Encrypted: No)
+//! - **Bytes 9-10**: Key Version Number (2AN, Encrypted: No)
+//! - **Byte 11**: Exportability (1AN, Encrypted: No)
+//! - **Bytes 12-13**: Number of Optional Blocks (2N, Encrypted: No)
+//! - **Bytes 14-15**: Reserved for Future Use (2N, Encrypted: No)
+//! - **Bytes 16+**: First Optional Block ID (if present)
+//!
+//! # Usage
+//! This module is used in systems where cryptographic key management is crucial, such as banking
+//! and financial systems, secure communications, and others.
+//!
+//! # Example
+//! ```
+//! use paysec::keyblock::KeyBlockHeader;
+//! use paysec::keyblock::OptBlock;
+//!
+//! // Example of creating a new KeyBlockHeader with an optional block
+//! let mut header = KeyBlockHeader::new_with_values("D", "P0", "A", "E", "00", "E").unwrap();
+//! let opt_block = OptBlock::new("CT", "SomeData", None).unwrap();
+//! header.set_opt_blocks(Some(Box::new(opt_block)));
+//!
+//! // Finalize the header to ensure it conforms to block size requirements
+//! header.finalize().unwrap();
+//!
+//! // Set the key block length to the length of the header, as for the example
+//! let header_length = header.len();
+//! header.set_kb_length(header_length as u16).unwrap();
+//!
+//! // Export the header as a string
+//! let header_str = header.export_str().unwrap();
+//!
+//! // Example of how the header would look as a string
+//! let expected_header_str = "D0048P0AE00E0200CT0CSomeDataPB140000000000000000";
+//! assert_eq!(header_str, expected_header_str, "Header string representation mismatch");
+//! ```
+//!
+//! # References
+//! - TR-31: 2018, p. 15ff.
+
 use super::opt_block::OptBlock;
 
 use std::error::Error;

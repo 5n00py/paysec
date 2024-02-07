@@ -20,6 +20,34 @@
 //! additional metadata, custom fields, or other supplementary information that does not
 //! fit into the standard key block structure.
 //!
+//! # Example Usage
+//!
+//! ```
+//! use paysec::keyblock::OptBlock;
+//!
+//! // Creating a new OptBlock with an identifier, data, and no subsequent blocks
+//! let opt_block = OptBlock::new("CT", "ExampleData", None);
+//! assert!(opt_block.is_ok());
+//! let opt_block = opt_block.unwrap();
+//!
+//! // Displaying the identifier and data
+//! println!("ID: {}, Data: {}", opt_block.id(), opt_block.data());
+//!
+//! // Exporting the OptBlock to a string
+//! let exported_string = opt_block.export_str();
+//! assert!(exported_string.is_ok());
+//! println!("Exported OptBlock: {}", exported_string.unwrap());
+//!
+//! // Creating another OptBlock and appending it to the first one
+//! let next_block = OptBlock::new("PB", "PaddingData", None).unwrap();
+//! let mut opt_block_chain = opt_block;
+//! opt_block_chain.append(next_block);
+//!
+//! // Exporting the chained OptBlocks to a string
+//! let exported_chain = opt_block_chain.export_str().unwrap();
+//! println!("Exported OptBlock Chain: {}", exported_chain);
+//! ```
+//!
 //! # References
 //!
 //! TR-31: 2018, p. 17-18, 27-33.
