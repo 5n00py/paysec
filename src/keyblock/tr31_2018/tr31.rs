@@ -29,6 +29,8 @@ const TR31_D_BLOCK_LEN: usize = 16;
 /// # Errors
 /// Returns an error if:
 /// * The key block version is not supported (currently only 'D' is implemented).
+/// * The total key block length is not a multiple of the of the block size for the underlying
+///   algorithms.
 /// * There are issues with key derivation, payload construction, MAC computation, or encryption.
 /// * The header or payload data are improperly formatted.
 pub fn tr31_wrap(
@@ -54,6 +56,15 @@ pub fn tr31_wrap(
 
     // Calculate total key block length ascii encoded
     let total_block_length = header.len() + (payload.len() * 2) + (TR31_D_MAC_LEN * 2);
+
+    // Check if total_block_length is a multiple of TR31_D_BLOCK_LEN
+    if total_block_length % TR31_D_BLOCK_LEN != 0 {
+        return Err(format!(
+            "ERROR TR-31: Total block length is not a multiple of block length: {}",
+            TR31_D_BLOCK_LEN
+        )
+        .into());
+    }
 
     // Update the block length in the header
     header.set_kb_length(total_block_length as u16)?;

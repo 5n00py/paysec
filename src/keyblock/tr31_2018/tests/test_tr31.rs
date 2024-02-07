@@ -172,3 +172,20 @@ pub fn test_tr31_wrap_example_aes_256_two_optional_blocks() {
     let expected_key_block = "D0144P0TE00N0200KS1800604B120F9292800000PB080000BB07D34B055CF948CD3FB0C9D55AC064F32D855EBC0AE666E49C6393BC4EA33B356E735F1BEE0612C6E80A5DAB7B9BCA";
     assert_eq!(key_block, expected_key_block, "Complete key block mismatch");
 }
+
+#[test]
+fn test_tr31_wrap_error_key_block_length_not_multiple_of_block_size() {
+    let header =
+        KeyBlockHeader::new_from_str("D0048P0TE00N0200KS1800604B120F9292800000PB0600").unwrap();
+    let key = hex::decode("FFEEDDCCBBAA99887766554433221100").unwrap();
+    let masked_key_length = 0;
+    let random_seed = hex::decode("223655F4BC798073D74B705B9FFB").unwrap();
+    let kbpk = hex::decode("00112233445566778899AABBCCDDEEFF0011223344556677").unwrap();
+
+    let result = tr31_wrap(&kbpk, header, &key, masked_key_length, &random_seed);
+
+    assert!(matches!(
+        result,
+        Err(e) if e.to_string() == "ERROR TR-31: Total block length is not a multiple of block length: 16"
+    ));
+}
