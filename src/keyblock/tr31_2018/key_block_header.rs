@@ -6,50 +6,36 @@ use std::error::Error;
 ///
 /// The `KeyBlockHeader` struct encapsulates all the necessary information
 /// required to define the characteristics of a key block according to
-/// TR-31 standards. It includes fields like version ID, key usage,
+/// TR-31 standards. It includes fields for version ID, key usage,
 /// algorithm, mode of use, etc., and supports optional blocks for
 /// additional data.
-/// The struct contains also fields used for internal processing and
-/// calculations that are not part of the final key block header in the encoded
-/// key block.
+///
+/// # Fields
+/// - `version_id`: Identifies the version of the key block, determining its cryptographic
+///                 protection method and the layout.
+/// - `kb_length`: Specifies the total length of the key block after encoding,
+///                including the header, encrypted data, and MAC.
+/// - `key_usage`: Indicates the intended function of the protected key/sensitive data.
+/// - `algorithm`: Specifies the algorithm to be used for the protected key.
+/// - `mode_of_use`: Defines the operation that the protected key can perform.
+/// - `key_version_number`: Optional version number of the key, used for key management.
+/// - `exportability`: Indicates the exportability of the protected key.
+/// - `num_opt_blocks`: Number of optional blocks included in the key block.
+/// - `reserved_field`: Reserved for future use, currently filled with zero characters.
+/// - `opt_blocks`: Contains additional optional blocks of data if present.
+///
 #[derive(Debug, PartialEq)]
 pub struct KeyBlockHeader {
-    /// Identifies the version of the key block, determining its cryptographic
-    /// protection method and the layout.
     version_id: String,
-
-    /// Specifies the total length of the key block after encoding,
-    /// including header, encrypted data, and MAC.
     kb_length: u16,
-
-    /// Indicates the intended function of the protected key/sensitive data.
     key_usage: String,
-
-    /// Specifies the algorithm to be used for the protected key.
     algorithm: String,
-
-    /// Defines the operation that the protected key can perform.
     mode_of_use: String,
-
-    /// Optional version number of the key, used for key management.
     key_version_number: String,
-
-    /// Indicates the exportability of the protected key.
     exportability: String,
-
-    /// Number of optional blocks included in the key block.
     num_opt_blocks: u8,
-
-    /// Reserved for future use, currently filled with zero characters.
     reserved_field: String,
-
-    /// Contains additional optional blocks of data if present.
     opt_blocks: Option<Box<OptBlock>>,
-
-    /// Size of the encryption block used in the key block, used for internal
-    /// calculations related to encryption and padding mechanisms, not part of
-    /// the final key block header.
-    enc_block_size: usize,
 }
 
 impl KeyBlockHeader {
@@ -88,8 +74,6 @@ impl KeyBlockHeader {
             num_opt_blocks: 0,
             reserved_field: "00".to_string(),
             opt_blocks: None,
-
-            enc_block_size: 0,
         }
     }
 
@@ -270,10 +254,6 @@ impl KeyBlockHeader {
     pub fn set_version_id(&mut self, value: &str) -> Result<(), Box<dyn Error>> {
         if Self::ALLOWED_VERSION_IDS.contains(&value) {
             self.version_id = value.to_string();
-
-            // Set block size based on version ID
-            self.enc_block_size = if value == "A" { 16 } else { 8 };
-
             Ok(())
         } else {
             Err(Box::<dyn Error>::from(format!(
