@@ -39,17 +39,23 @@
 //! - It does not enforce or verify key block usage, algorithm, mode of use, etc., except for
 //!   format requirements.
 //! - The provided key block header must belong to the key block and cannot be
-//!   substituted.
+//!   substituted which is enforced by this implementation.
 //! - Upon successful validation/unwrapping, the module provides parsed key block
 //!   header properties.
 //! - The random seed must be provided externally; this library does not assess
 //!   entropy or random number generation quality.
-//! - Cryptographic operations leverage the `soft-aes` crate, which (currently)
-//!   lacks protections against side-channel attacks.
+//! - Cryptographic operations use the `soft-aes` crate, which (currently) lacks
+//!   protections against side-channel attacks.
 //! - In a production environment, using a hardware security module (HSM) for
 //!   core cryptographic operations and random number generation is recommended.
+//! - Compliance with specific security standards such as PCI DSS, PCI P2PE and PCI PIN
+//!   is not explicitly considered or implemented in this library.
+//! - Proper management of cryptographic keys, including those used for protection (like KBPK),
+//!   is crucial. Users are responsible for ensuring that key management practices meet
+//!   the necessary security requirements.
 //!
 //! # Disclaimer
+//!
 //! - This library is provided "as is", with no warranty or guarantees regarding its security or
 //!   effectiveness in a production environment.
 //!
