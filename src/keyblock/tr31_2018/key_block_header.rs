@@ -65,6 +65,7 @@
 //! # References
 //! - TR-31: 2018, p. 15ff.
 
+use super::constants::*;
 use super::opt_block::OptBlock;
 
 use std::error::Error;
@@ -106,25 +107,6 @@ pub struct KeyBlockHeader {
 }
 
 impl KeyBlockHeader {
-    /// Predefined allowed version IDs for the key block.
-    const ALLOWED_VERSION_IDS: [&'static str; 4] = ["A", "B", "C", "D"];
-
-    /// Predefined allowed key usages for the key block.
-    const ALLOWED_KEY_USAGES: [&'static str; 29] = [
-        "B0", "B1", "B2", "C0", "D0", "D1", "D2", "E0", "E1", "E2", "E3", "E4", "E5", "E6", "K0",
-        "K1", "K2", "K3", "M0", "M1", "M2", "M3", "M4", "M5", "M6", "M7", "M8", "P0", "S0",
-    ];
-
-    /// Predefined allowed algorithms for the key block.
-    const ALLOWED_ALGORITHMS: [&'static str; 7] = ["A", "D", "E", "H", "R", "S", "T"];
-
-    /// Predefined allowed modes of use for the key block.
-    const ALLOWED_MODES_OF_USE: [&'static str; 11] =
-        ["B", "C", "D", "E", "G", "N", "S", "T", "V", "X", "Y"];
-
-    /// Predefined allowed exportabilities for the key block.
-    const ALLOWED_EXPORTABILITIES: [&'static str; 3] = ["E", "N", "S"];
-
     /// Create a new, empty `KeyBlockHeader`.
     ///
     /// Initializes all string fields to empty strings, numerical fields to zero,
@@ -319,7 +301,7 @@ impl KeyBlockHeader {
     ///
     /// A `Result` which is `Ok` if the value is valid, or an `Err` with a boxed error.
     pub fn set_version_id(&mut self, value: &str) -> Result<(), Box<dyn Error>> {
-        if Self::ALLOWED_VERSION_IDS.contains(&value) {
+        if ALLOWED_VERSION_IDS.contains(&value) {
             self.version_id = value.to_string();
             Ok(())
         } else {
@@ -376,7 +358,7 @@ impl KeyBlockHeader {
     ///
     /// A `Result` which is `Ok` if the value is valid, or an `Err` with a boxed error.
     pub fn set_key_usage(&mut self, value: &str) -> Result<(), Box<dyn Error>> {
-        if Self::ALLOWED_KEY_USAGES.contains(&value) {
+        if ALLOWED_KEY_USAGES.contains(&value) {
             self.key_usage = value.to_string();
             Ok(())
         } else {
@@ -405,7 +387,7 @@ impl KeyBlockHeader {
     ///
     /// A `Result` which is `Ok` if the value is valid, or an `Err` with a boxed error.
     pub fn set_algorithm(&mut self, value: &str) -> Result<(), Box<dyn Error>> {
-        if Self::ALLOWED_ALGORITHMS.contains(&value) {
+        if ALLOWED_ALGORITHMS.contains(&value) {
             self.algorithm = value.to_string();
             Ok(())
         } else {
@@ -434,7 +416,7 @@ impl KeyBlockHeader {
     ///
     /// A `Result` which is `Ok` if the value is valid, or an `Err` with a boxed error.
     pub fn set_mode_of_use(&mut self, value: &str) -> Result<(), Box<dyn Error>> {
-        if Self::ALLOWED_MODES_OF_USE.contains(&value) {
+        if ALLOWED_MODES_OF_USE.contains(&value) {
             self.mode_of_use = value.to_string();
             Ok(())
         } else {
@@ -497,7 +479,7 @@ impl KeyBlockHeader {
     ///
     /// A `Result` which is `Ok` if the value is valid, or an `Err` with a boxed error.
     pub fn set_exportability(&mut self, value: &str) -> Result<(), Box<dyn Error>> {
-        if Self::ALLOWED_EXPORTABILITIES.contains(&value) {
+        if ALLOWED_EXPORTABILITIES.contains(&value) {
             self.exportability = value.to_string();
             Ok(())
         } else {
