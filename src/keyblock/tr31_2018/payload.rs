@@ -65,3 +65,40 @@ pub fn construct_payload(
 
     Ok(payload)
 }
+
+/// Extract the secret key from a TR-31 payload.
+///
+/// This function reads the key length (in bits) from the first 2 bytes of the payload,
+/// then extracts the key based on this length. The function assumes that the payload is
+/// correctly formatted according to TR-31 specifications.
+///
+/// # Arguments
+///
+/// * `payload`: The TR-31 payload containing the key length, key, and padding.
+///
+/// # Returns
+///
+/// A `Result` containing the extracted key as a `Vec<u8>` if successful, or an error if the payload is incorrectly formatted.
+///
+/// # Errors
+///
+/// This function returns an error if the payload length is too short to contain a valid key length and key.
+pub fn extract_key_from_payload(payload: &[u8]) -> Result<Vec<u8>, Box<dyn Error>> {
+    if payload.len() < 2 {
+        return Err("ERROR TR-31 PAYLOAD: Payload too short to contain valid key length".into());
+    }
+
+    // Read the key length in bits from the first 2 bytes and convert to bytes
+    let key_length_bits = u16::from_be_bytes([payload[0], payload[1]]);
+    let key_length_bytes = (key_length_bits / 8) as usize;
+
+    // Check if the payload has enough data for the key
+    if payload.len() < 2 + key_length_bytes {
+        return Err("ERROR TR-31 PAYLOAD: Payload too short for the specified key length".into());
+    }
+
+    // Extract the key based on the calculated length
+    let key = payload[2..2 + key_length_bytes].to_vec();
+
+    Ok(key)
+}

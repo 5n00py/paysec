@@ -1,4 +1,4 @@
-use super::super::payload::construct_payload;
+use super::super::payload::*;
 
 #[test]
 fn test_construct_payload() {
@@ -36,4 +36,24 @@ fn test_construct_payload_a7421() {
         hex::decode("00803F419E1CB7079442AA37474C2EFBF8B81C2965473CE206BB855B01533782").unwrap();
 
     assert_eq!(payload, expected_payload);
+}
+
+#[test]
+fn test_extract_key_from_payload() {
+    let expected_key = hex::decode("AABBCCDDEEFFAABB").unwrap();
+    let payload =
+        hex::decode("0040AABBCCDDEEFFAABB8E3BF4CF899549351C4D467585EC0C01BCC3FCAAF9CE").unwrap();
+
+    let extracted_key = extract_key_from_payload(&payload).unwrap();
+    assert_eq!(extracted_key, expected_key);
+}
+
+#[test]
+fn test_extract_key_from_payload_a7421() {
+    let expected_key = hex::decode("3F419E1CB7079442AA37474C2EFBF8B8").unwrap();
+    let payload =
+        hex::decode("00803F419E1CB7079442AA37474C2EFBF8B81C2965473CE206BB855B01533782").unwrap();
+
+    let extracted_key = extract_key_from_payload(&payload).unwrap();
+    assert_eq!(extracted_key, expected_key);
 }
