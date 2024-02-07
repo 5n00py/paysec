@@ -7,6 +7,30 @@ use std::error::Error;
 const TR31_D_MAC_LEN: usize = 16;
 const TR31_D_BLOCK_LEN: usize = 16;
 
+/// Wrap a cryptographic key according to TR-31 key block format version 'D'.
+///
+/// This function implements the TR-31 key block wrapping mechanism for version 'D'. It involves
+/// several steps: key derivation, payload construction, MAC computation, encryption, and
+/// assembly of the final key block. It takes the key block protection key (KBPK), a key block
+/// header, the key to be protected, a masked key length, and a random seed as inputs.
+///
+/// # Arguments
+/// * `kbpk` - Key Block Protection Key used for deriving the encryption (KBEK) and
+///            authentication (KBAK) keys.
+/// * `header` - KeyBlockHeader instance containing metadata for the key block.
+/// * `key` - The cryptographic key or sensitive data to be protected.
+/// * `masked_key_len` - Length used to mask the true length of short keys.
+/// * `random_seed` - Random seed used for generating padding in the payload.
+///
+/// # Returns
+/// A `Result` containing the TR-31 formatted key block as a String or an error if any
+/// step in the key block construction process fails.
+///
+/// # Errors
+/// Returns an error if:
+/// * The key block version is not supported (currently only 'D' is implemented).
+/// * There are issues with key derivation, payload construction, MAC computation, or encryption.
+/// * The header or payload data are improperly formatted.
 pub fn tr31_wrap(
     kbpk: &[u8],
     mut header: KeyBlockHeader,
@@ -51,7 +75,6 @@ pub fn tr31_wrap(
     // Construct the complete key block in ascii
     let encrypted_payload_hex = hex::encode_upper(&encrypted_payload);
     let mac_hex = hex::encode_upper(&mac);
-
     let complete_key_block = format!("{}{}{}", header_str, encrypted_payload_hex, mac_hex);
 
     Ok(complete_key_block)
