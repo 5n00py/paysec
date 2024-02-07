@@ -532,6 +532,68 @@ impl KeyBlockHeader {
         &self.reserved_field
     }
 
+    /// Set the optional blocks for the key block header and update the number of optional blocks.
+    ///
+    /// This method sets the `opt_blocks` field with the provided optional blocks and updates
+    /// the `num_opt_blocks` field based on the count of the optional blocks.
+    ///
+    /// # Arguments
+    ///
+    /// * `opt_blocks` - An `Option<Box<OptBlock>>` representing the optional blocks.
+    pub fn set_opt_blocks(&mut self, opt_blocks: Option<Box<OptBlock>>) {
+        self.opt_blocks = opt_blocks;
+
+        // Reset the count of optional blocks
+        self.num_opt_blocks = 0;
+
+        // If there are optional blocks, count them
+        if let Some(ref opt_block) = self.opt_blocks {
+            let mut current_block: &OptBlock = opt_block.as_ref();
+
+            self.num_opt_blocks = 1; // Counting the first block
+
+            // Iterate through the chain of optional blocks to count them
+            while let Some(next_block) = current_block.next() {
+                self.num_opt_blocks += 1;
+                current_block = next_block;
+            }
+        }
+    }
+
+    /// Append a linked list of `OptBlock` instances to the end of the existing
+    /// optional blocks in the `KeyBlockHeader`.
+    ///
+    /// # Arguments
+    ///
+    /// * `opt_block_to_append` - The head of the linked list of `OptBlock` instances to be appended.
+    ///
+    /// # WARNING!
+    ///
+    /// Not fully tested!
+    /// TODO: Add more unit tests for this function.
+    pub fn append_opt_blocks(&mut self, opt_block_to_append: OptBlock) {
+        // Count the number of blocks in the provided list
+        let mut additional_blocks_count = 1;
+        let mut current_block = &opt_block_to_append;
+        while let Some(next_block) = current_block.next() {
+            additional_blocks_count += 1;
+            current_block = next_block;
+        }
+
+        // Append the provided list to the existing optional blocks
+        match &mut self.opt_blocks {
+            Some(existing_opt_block) => {
+                existing_opt_block.append(opt_block_to_append);
+            }
+            None => {
+                self.opt_blocks = Some(Box::new(opt_block_to_append));
+            }
+        }
+
+        // Update the count of optional blocks
+        self.num_opt_blocks += additional_blocks_count;
+    }
+
     /// Get a reference to the optional blocks.
     pub fn opt_blocks(&self) -> &Option<Box<OptBlock>> {
         &self.opt_blocks

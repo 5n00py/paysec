@@ -376,3 +376,69 @@ fn test_set_reserved_field_invalid_value_error() {
         Ok(_) => panic!("Expected an error for invalid reserved field value, but got Ok"),
     }
 }
+
+#[test]
+fn test_set_opt_blocks_none() {
+    let mut header = KeyBlockHeader::new_empty();
+    header.set_opt_blocks(None);
+
+    assert!(header.opt_blocks().is_none());
+    assert_eq!(header.num_optional_blocks(), 0);
+}
+
+#[test]
+fn test_set_opt_blocks_single() {
+    let mut header = KeyBlockHeader::new_empty();
+    let opt_block = OptBlock::new("CT", "11223344", None).unwrap();
+    header.set_opt_blocks(Some(Box::new(opt_block.clone())));
+
+    assert_eq!(header.opt_blocks().as_ref().unwrap().as_ref(), &opt_block);
+    assert_eq!(header.num_optional_blocks(), 1);
+}
+
+#[test]
+fn test_set_opt_blocks_multiple() {
+    let mut header = KeyBlockHeader::new_empty();
+
+    let opt_block1 = OptBlock::new("CT", "11223344", None).unwrap();
+    let opt_block2 = OptBlock::new("PB", "AABBCCDD", None).unwrap();
+
+    let mut opt_block1_with_next = opt_block1.clone();
+    opt_block1_with_next.set_next(Some(opt_block2.clone()));
+    header.set_opt_blocks(Some(Box::new(opt_block1_with_next.clone())));
+
+    assert_eq!(header.num_optional_blocks(), 2);
+
+    let header_opt_blocks = header.opt_blocks().as_ref().unwrap();
+    assert_eq!(**header_opt_blocks, opt_block1_with_next);
+}
+
+#[test]
+fn test_set_opt_blocks_chain() {
+    let mut header = KeyBlockHeader::new_empty();
+
+    let opt_block1 = OptBlock::new("CT", "Data1", None).unwrap();
+    let opt_block2 = OptBlock::new("IK", "Data2", None).unwrap();
+    let opt_block3 = OptBlock::new("PB", "Data3", None).unwrap();
+
+    let mut opt_block_chain = opt_block1.clone();
+    opt_block_chain.append(opt_block2.clone());
+    opt_block_chain.append(opt_block3.clone());
+    header.set_opt_blocks(Some(Box::new(opt_block_chain.clone())));
+
+    assert_eq!(header.num_optional_blocks(), 3);
+
+    let header_opt_blocks = header.opt_blocks().as_ref().unwrap();
+    assert_eq!(**header_opt_blocks, opt_block_chain);
+}
+
+#[test]
+fn test_append_opt_blocks_single_block() {
+    let mut header = KeyBlockHeader::new_empty();
+    let opt_block = OptBlock::new("CT", "Data1", None).unwrap();
+
+    header.append_opt_blocks(opt_block.clone());
+
+    assert_eq!(header.num_optional_blocks(), 1);
+    assert_eq!(&*header.opt_blocks().clone().unwrap(), &opt_block);
+}
