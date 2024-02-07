@@ -101,7 +101,7 @@ fn test_new_from_str_with_optional_block() {
     assert_eq!(result.exportability(), "N");
     assert_eq!(result.num_optional_blocks(), 1);
     assert_eq!(result.reserved_field(), "00");
-    assert_eq!(result.header_length(), 28);
+    assert_eq!(result.len(), 28);
 
     // Assert the optional block
     let opt_block_ref = result.opt_blocks().as_ref().unwrap();

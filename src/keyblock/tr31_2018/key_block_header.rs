@@ -46,10 +46,6 @@ pub struct KeyBlockHeader {
     /// Contains additional optional blocks of data if present.
     opt_blocks: Option<Box<OptBlock>>,
 
-    /// Length of the header part of the key block, used for internal processing
-    /// and not part of the final key block.
-    header_length: usize,
-
     /// Size of the encryption block used in the key block, used for internal
     /// calculations related to encryption and padding mechanisms, not part of
     /// the final key block header.
@@ -93,7 +89,6 @@ impl KeyBlockHeader {
             reserved_field: "00".to_string(),
             opt_blocks: None,
 
-            header_length: 0,
             enc_block_size: 0,
         }
     }
@@ -130,8 +125,6 @@ impl KeyBlockHeader {
         header.set_mode_of_use(mode_of_use)?;
         header.set_key_version_number(key_version_number)?;
         header.set_exportability(exportability)?;
-
-        header.header_length = 16;
 
         Ok(header)
     }
@@ -182,8 +175,6 @@ impl KeyBlockHeader {
         header.set_num_optional_blocks(num_optional_blocks)?;
         header.set_reserved_field(&reserved_field)?;
 
-        header.header_length = 16;
-
         if num_optional_blocks > 0 && header_str.len() < 20 {
             return Err(
                 "ERROR TR-31 HEADER: Invalid header length containing optional blocks".into(),
@@ -201,7 +192,6 @@ impl KeyBlockHeader {
             }
 
             header.opt_blocks = Some(Box::new(opt_block_res.unwrap()));
-            header.header_length += header.opt_blocks.as_ref().unwrap().total_length();
         }
 
         Ok(header)
@@ -599,8 +589,16 @@ impl KeyBlockHeader {
         &self.opt_blocks
     }
 
-    /// Get the value of the header length
-    pub fn header_length(&self) -> usize {
-        self.header_length
+    /// Get the header length including the length of optional blocks.
+    pub fn len(&self) -> usize {
+        // Minimum length of header without optional blocks: 16
+        let mut header_length = 16;
+
+        // Add the length of optional blocks if they exist
+        if let Some(ref opt_blocks) = self.opt_blocks {
+            header_length += opt_blocks.total_length();
+        }
+
+        header_length
     }
 }

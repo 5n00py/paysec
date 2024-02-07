@@ -53,7 +53,7 @@ pub fn tr31_wrap(
     let payload = construct_payload(key, masked_key_len, TR31_D_BLOCK_LEN, random_seed)?;
 
     // Calculate total key block length ascii encoded
-    let total_block_length = header.header_length() + (payload.len() * 2) + (TR31_D_MAC_LEN * 2);
+    let total_block_length = header.len() + (payload.len() * 2) + (TR31_D_MAC_LEN * 2);
 
     // Update the block length in the header
     header.set_kb_length(total_block_length as u16)?;
