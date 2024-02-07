@@ -1,5 +1,6 @@
 use super::super::tr31::*;
 use super::super::KeyBlockHeader;
+use super::super::OptBlock;
 
 #[test]
 pub fn test_tr31_wrap_example_a_7_4() {
@@ -50,30 +51,30 @@ pub fn test_tr31_wrap_example_aes_128_masked_length() {
     assert_eq!(key_block, expected_key_block, "Complete key block mismatch");
 }
 
-// #[test]
-// pub fn test_tr31_wrap_example_aes_128_two_optional_blocks() {
-//     // AES-128 KBPK, two optional blocks, zero masked length
-//     let mut header = KeyBlockHeader::new_with_values("D", "P0", "T", "E", "00", "N").unwrap();
-//     header.set_num_optional_blocks(2).unwrap();
-//
-//     // Add the first optional block
-//     let mut opt_block1 = OptBlock::new("KS", "0604B120F92928000000", None).unwrap();
-//     // Add the second optional block
-//     let opt_block2 = OptBlock::new("PB", "0000", None).unwrap();
-//     opt_block1.set_next(Some(opt_block2));
-//     header.set_opt_blocks(Some(Box::new(opt_block1)));
-//
-//     let key = hex::decode("FFEEDDCCBBAA99887766554433221100").unwrap();
-//     let masked_key_length = 0; // No masked length
-//     let random_seed = hex::decode("DDCAA6156A32D4A2734F9AF8A06A").unwrap();
-//     let kbpk = hex::decode("00112233445566778899AABBCCDDEEFF").unwrap();
-//
-//     let key_block = tr31_wrap(&kbpk, header, &key, masked_key_length, &random_seed).unwrap();
-//
-//     let expected_key_block = "D0144P0TE00N0200KS1800604B120F9292800000PB0800008C33D790E39C605B6966CB81E79ADBDFEF1341850A655F383783CB17F64E3D3E0901DC80A564B8365F0979A06904FEEA";
-//     assert_eq!(key_block, expected_key_block, "Complete key block mismatch");
-// }
-//
+#[test]
+pub fn test_tr31_wrap_example_aes_128_two_optional_blocks() {
+    // AES-128 KBPK, two optional blocks, zero masked length
+    let mut header = KeyBlockHeader::new_with_values("D", "P0", "T", "E", "00", "N").unwrap();
+    header.set_num_optional_blocks(2).unwrap();
+
+    // Add the first optional block
+    let mut opt_block1 = OptBlock::new("KS", "00604B120F9292800000", None).unwrap();
+    // Add the second optional block
+    let opt_block2 = OptBlock::new("PB", "0000", None).unwrap();
+    opt_block1.set_next(Some(opt_block2));
+    header.set_opt_blocks(Some(Box::new(opt_block1)));
+
+    let key = hex::decode("FFEEDDCCBBAA99887766554433221100").unwrap();
+    let masked_key_length = 0; // No masked length
+    let random_seed = hex::decode("DDCAA6156A32D4A2734F9AF8A06A").unwrap();
+    let kbpk = hex::decode("00112233445566778899AABBCCDDEEFF").unwrap();
+
+    let key_block = tr31_wrap(&kbpk, header, &key, masked_key_length, &random_seed).unwrap();
+
+    let expected_key_block = "D0144P0TE00N0200KS1800604B120F9292800000PB0800008C33D790E39C605B6966CB81E79ADBDFEF1341850A655F383783CB17F64E3D3E0901DC80A564B8365F0979A06904FEEA";
+    assert_eq!(key_block, expected_key_block, "Complete key block mismatch");
+}
+
 #[test]
 pub fn test_tr31_wrap_example_aes_192_no_optional_blocks() {
     // AES-192 KBPK, no optional blocks, no masked length
@@ -112,6 +113,24 @@ pub fn test_tr31_wrap_example_aes_192_two_optional_blocks() {
     // AES-192 KBPK, two optional blocks, zero masked length
     let header =
         KeyBlockHeader::new_from_str("D0048P0TE00N0200KS1800604B120F9292800000PB080000").unwrap();
+    let key = hex::decode("FFEEDDCCBBAA99887766554433221100").unwrap();
+    let masked_key_length = 0;
+    let random_seed = hex::decode("223655F4BC798073D74B705B9FFB").unwrap();
+    let kbpk = hex::decode("00112233445566778899AABBCCDDEEFF0011223344556677").unwrap();
+
+    let key_block = tr31_wrap(&kbpk, header, &key, masked_key_length, &random_seed).unwrap();
+
+    let expected_key_block = "D0144P0TE00N0200KS1800604B120F9292800000PB080000F2A795BB540447553D9FA3812E64E76A577DA04A1E0DD9FA9EFDE394BE936D4532BF5BA7E57063B63FCD90F9C2020F77";
+    assert_eq!(key_block, expected_key_block, "Complete key block mismatch");
+}
+
+#[test]
+pub fn test_tr31_wrap_example_aes_192_one_optional_block_finalized() {
+    // AES-192 KBPK, one optional blocks, zero masked length
+    let mut header =
+        KeyBlockHeader::new_from_str("D0048P0TE00N0100KS1800604B120F9292800000").unwrap();
+    // Add padding block
+    header.finalize().unwrap();
     let key = hex::decode("FFEEDDCCBBAA99887766554433221100").unwrap();
     let masked_key_length = 0;
     let random_seed = hex::decode("223655F4BC798073D74B705B9FFB").unwrap();

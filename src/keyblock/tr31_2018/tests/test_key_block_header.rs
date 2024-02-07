@@ -442,3 +442,71 @@ fn test_append_opt_blocks_single_block() {
     assert_eq!(header.num_optional_blocks(), 1);
     assert_eq!(&*header.opt_blocks().clone().unwrap(), &opt_block);
 }
+
+#[test]
+fn test_finalize_no_opt_blocks() {
+    let mut header = KeyBlockHeader::new_with_values("D", "P0", "A", "E", "00", "E").unwrap();
+    header.finalize().unwrap();
+
+    assert_eq!(header.num_optional_blocks(), 0);
+    assert!(header.opt_blocks().is_none());
+}
+
+#[test]
+fn test_finalize_with_opt_blocks_no_padding_needed() {
+    let mut header = KeyBlockHeader::new_with_values("D", "P0", "A", "E", "00", "E").unwrap();
+    // This will create an opt block with length 16:
+    let opt_block = OptBlock::new("CT", "123456789012", None).unwrap();
+    header.set_opt_blocks(Some(Box::new(opt_block)));
+
+    header.finalize().unwrap();
+
+    assert_eq!(header.num_optional_blocks(), 1);
+    assert!(header.opt_blocks().is_some());
+}
+
+#[test]
+fn test_finalize_with_opt_blocks_padding_needed_version_d() {
+    let mut header = KeyBlockHeader::new_with_values("D", "P0", "A", "E", "00", "E").unwrap();
+    let opt_block = OptBlock::new("CT", "123", None).unwrap(); // Length not a multiple of 16
+    header.set_opt_blocks(Some(Box::new(opt_block)));
+
+    header.finalize().unwrap();
+
+    assert_eq!(header.num_optional_blocks(), 2);
+    assert_eq!(
+        header.opt_blocks().clone().unwrap().next().unwrap().id(),
+        "PB"
+    );
+    assert_eq!(header.len() % 16, 0);
+}
+
+#[test]
+fn test_finalize_with_opt_blocks_padding_needed_version_other() {
+    let mut header = KeyBlockHeader::new_with_values("A", "P0", "A", "E", "00", "E").unwrap();
+    let opt_block = OptBlock::new("CT", "12345", None).unwrap(); // Length not a multiple of 8
+    header.set_opt_blocks(Some(Box::new(opt_block)));
+
+    header.finalize().unwrap();
+
+    assert_eq!(header.num_optional_blocks(), 2);
+    assert_eq!(
+        header.opt_blocks().clone().unwrap().next().unwrap().id(),
+        "PB"
+    );
+    assert_eq!(header.len() % 8, 0);
+}
+
+#[test]
+fn test_finalize_with_long_padding_needed() {
+    let mut header = KeyBlockHeader::new_with_values("D", "P0", "A", "E", "00", "E").unwrap();
+    let opt_block_data = "1".repeat(10);
+    let opt_block = OptBlock::new("CT", &opt_block_data, None).unwrap();
+    header.set_opt_blocks(Some(Box::new(opt_block)));
+    // Total length is now 30, but padding will be up to a length of 48 to fit an optional block.
+
+    header.finalize().unwrap();
+
+    assert_eq!(header.num_optional_blocks(), 2);
+    assert_eq!(header.len(), 48);
+}

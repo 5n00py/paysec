@@ -331,46 +331,6 @@ impl OptBlock {
         }
     }
 
-    // pub fn finalize_with_pad_block(
-    //     &mut self,
-    //     pad_char: char,
-    //     enc_block_size: usize,
-    // ) -> Result<(), String> {
-    //     // Check that enc_block_size is a multiple of 8 or 16
-    //     if enc_block_size % 8 != 0 && enc_block_size % 16 != 0 {
-    //         return Err(String::from(
-    //             "ERROR TR-31 OPT BLOCK: Encryption block size must be a multiple of 8 or 16",
-    //         ));
-    //     }
-    //
-    //     // Check that pad_char is an ascii printable character
-    //     if !pad_char.is_ascii() {
-    //         return Err(String::from(
-    //             "ERROR TR-31 OPT BLOCK: Padding character must be an ascii printable character",
-    //         ));
-    //     }
-    //
-    //     let total_length = self.total_length();
-    //
-    //     // If the length of all opt blocks is already a multiple of enc_block_size, no padding block needed.
-    //     if total_length % enc_block_size == 0 {
-    //         return Ok(());
-    //     }
-    //
-    //     // Compute the padding length of the data to be padded, note that ID and length field already
-    //     // take 4 bytes.
-    //     let padding_length = enc_block_size - ((total_length + 4) % enc_block_size);
-    //
-    //     // Create the padding block
-    //     let pad_data = pad_char.to_string().repeat(padding_length);
-    //     let mut pad_block = OptBlock::new("PB", &pad_data, None)?;
-    //
-    //     // Append the padding block to the linked list
-    //     self.append(pad_block);
-    //
-    //     Ok(())
-    // }
-
     /// Determines whether the given `id` string is allowed.
     ///
     /// # Arguments

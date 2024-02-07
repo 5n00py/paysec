@@ -581,4 +581,38 @@ impl KeyBlockHeader {
 
         header_length
     }
+
+    /// Finalize the key block header to ensure its length is a multiple of the underlying cipher block size.
+    /// A padding block with ID "PB" is appended if necessary.
+    pub fn finalize(&mut self) -> Result<(), Box<dyn Error>> {
+        let block_size = if self.version_id == "D" { 16 } else { 8 };
+        let header_length = self.len();
+
+        // Only proceed if there are optional blocks and the header length is not already a multiple of block size
+        if let Some(ref mut opt_blocks) = self.opt_blocks {
+            if header_length % block_size != 0 {
+                let mut padding_needed = block_size - (header_length % block_size);
+
+                // Make sure the padding block consists minimum of 6 bytes (ID, length field and at
+                // least two 0s) and append otherwise.
+                if padding_needed < 6 {
+                    padding_needed += block_size;
+                }
+
+                // Length of the padding data without ID and length field.
+                let padding_data_length = padding_needed - 4;
+
+                let padding_data = "0".repeat(padding_data_length);
+                let padding_block = OptBlock::new("PB", &padding_data, None)?;
+
+                // Append the padding block
+                opt_blocks.append(padding_block);
+
+                // Update the number of optional blocks
+                self.num_opt_blocks += 1;
+            }
+        }
+
+        Ok(())
+    }
 }
