@@ -1,4 +1,3 @@
-use std::cmp::max;
 use std::error::Error;
 
 /// Constructs the payload for a TR-31 key block.
@@ -30,21 +29,11 @@ pub fn construct_payload(
     random_seed: &[u8],
 ) -> Result<Vec<u8>, Box<dyn Error>> {
     let key_len = key.len();
-    // if key_len > TR31_MAX_KEY_LENGTH {
-    //     return Err("ERROR TR-31 PAYLOAD: Key length too long".into());
-    // }
-    // TODO: Calculate max length of key to fit the length field...
 
-    let raw_key_section_length = 2 + key_len;
+    // Calculate the padding length
+    let padding_length = calculate_padding_length(key_len, masked_key_length, cipher_block_length)?;
 
-    let effective_key_length = max(key_len, masked_key_length);
-    let total_payload_length = ((2 + effective_key_length + (cipher_block_length - 1))
-        / cipher_block_length)
-        * cipher_block_length;
-
-    let padding_length = total_payload_length - raw_key_section_length;
-
-    let mut payload = Vec::with_capacity(total_payload_length);
+    let mut payload = Vec::with_capacity(key_len + 2 + padding_length);
 
     // Write the key length in bits (16-bit big endian)
     payload.extend_from_slice(&(8 * key_len as u16).to_be_bytes());
@@ -101,4 +90,35 @@ pub fn extract_key_from_payload(payload: &[u8]) -> Result<Vec<u8>, Box<dyn Error
     let key = payload[2..2 + key_length_bytes].to_vec();
 
     Ok(key)
+}
+
+/// Calculate the padding length for a TR-31 key block payload.
+///
+/// # Arguments
+/// * `key_len`: The length of the key in bytes.
+/// * `masked_key_length`: The minimum length for the key data, used to mask the true length of shorter keys.
+/// * `cipher_block_length`: The block length of the encryption cipher (e.g., 16 for AES).
+///
+/// # Returns
+/// The padding length required for the payload.
+///
+/// # Errors
+/// Returns an error if the calculated total payload length or padding length is invalid.
+pub fn calculate_padding_length(
+    key_len: usize,
+    masked_key_length: usize,
+    cipher_block_length: usize,
+) -> Result<usize, Box<dyn Error>> {
+    let raw_key_section_length = 2 + key_len;
+    let effective_key_length = std::cmp::max(key_len, masked_key_length);
+    let total_payload_length = ((2 + effective_key_length + (cipher_block_length - 1))
+        / cipher_block_length)
+        * cipher_block_length;
+
+    if total_payload_length < raw_key_section_length {
+        return Err("ERROR TR-31 PAYLOAD: Invalid total payload length".into());
+    }
+
+    let padding_length = total_payload_length - raw_key_section_length;
+    Ok(padding_length)
 }

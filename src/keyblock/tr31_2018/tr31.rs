@@ -1,12 +1,19 @@
 //! Module for TR-31 Key Block Wrapping and Unwrapping.
 //!
+//! # Standard
+//!
+//! Accredited Standards Committee X9: "ASC X9 TR 31-2018: Interoperable Secure Key Exchange Key Block Specification"
+//! In the following referenced as "TR-31: 2018"
+//!
+//! # Description
+//!
 //! This module provides functions for wrapping and unwrapping cryptographic keys according to
 //! the TR-31 key block format, version 'D'. TR-31 defines a method consistent with the requirements
 //! of ANS X9.24 Retail Financial Services Symmetric Key Management Part 1 for the secure exchange of
 //! keys and other sensitive data between two devices that share a symmetric key exchange key. This
 //! method may also be used for the storage of keys under a symmetric key.
 //!
-//! # Key Block Format
+//! # Key Block Format (TR-31: 2018, p. 15)
 //!
 //! The Key Block consists of three parts:
 //! 1. The Key Block Header (KBH) contains attribute information about the key and the key block and is not encrypted.
@@ -18,11 +25,14 @@
 //!     - Random padding up to a fixed length or masked length.
 //! 3. A MAC, which is 16 bytes long.
 //!
-//! # Key Block Wrapping Process
+//! # Key Block Binding Method (TR-31: 2018, p. 9-13)
 //!
-//! The encryption key and authentication key are derived from the Key Block Protection Key (KBPK) using CMAC
-//! as a pseudorandom function. The key block construction process includes key derivation, payload construction,
-//! MAC computation, encryption, and assembly of the final key block.
+//! The Key Block Binding Method is the technique use to protect the secrecy and integrity of the
+//! key block. The method uses a Key Block Protection Key (KBPK) that was previously echanged
+//! between two communicating parties. Currently version 'D' is implemented which uses AES-CMAC to
+//! derive the encryption and authentication keys from the KBPK. The key block construction process
+//! includes key derivation, payload construction, MAC computation, encryption, and assembly of the
+//! final key block.
 //!
 //! # Supported Version
 //!
@@ -53,6 +63,13 @@
 //! - Proper management of cryptographic keys, including those used for protection (like KBPK),
 //!   is crucial. Users are responsible for ensuring that key management practices meet
 //!   the necessary security requirements.
+//!
+//! # Note on the Use of Payload Padding
+//!
+//! As mentioned above, this implementation does not provide any randomization as for the padding,
+//! but the padding must be provided from the calling instance to make deterministic test cases
+//! more suitable. However, the payload module exposes the function `calculate_padding_length`
+//! which can be used to calculate the length of the padding in advance.
 //!
 //! # Disclaimer
 //!

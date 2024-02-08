@@ -10,7 +10,7 @@
 //! An optional block consists of:
 //! - An identifier (`id`): A two-character ASCII string identifying the type of data.
 //! - A length field: Indicating the length of the optional block and varies depending on the size of the block:
-//!   - A two-byte hex-ASCII value of the length is below 256 bytes
+//!   - A two-byte hex-ASCII value of the length it it is below 256 bytes
 //!   - An extended length field for largers sized blocks
 //! - A data field (`data`): A variable-length string of ASCII printable characters.
 //!
@@ -55,6 +55,8 @@
 use std::error::Error;
 use std::fmt::Write;
 
+use super::header_constants::ALLOWED_OPT_BLOCK_IDS;
+
 /// Represent an optional block as defined in the TR-31 specification.
 ///
 /// Each `OptBlock` is identified by a two-character ASCII `id`, followed by a length field
@@ -77,9 +79,6 @@ pub struct OptBlock {
 }
 
 impl OptBlock {
-    /// Allowed IDs for an optional block, cf. TR-31: 2018, p. 28-29.
-    const ALLOWED_IDS: [&'static str; 9] = ["CT", "HM", "IK", "KC", "KP", "KS", "KV", "PB", "TS"];
-
     /// Create a new `OptBlock` instance with the specified `id`, `data`, and optional `next` block.
     ///
     /// # Arguments
@@ -370,7 +369,7 @@ impl OptBlock {
     /// `true` if the ID is allowed, `false` otherwise.
     ///
     pub fn is_allowed_id(id: &str) -> bool {
-        Self::ALLOWED_IDS.contains(&id)
+        ALLOWED_OPT_BLOCK_IDS.contains(&id)
     }
 
     /// Returns the total length of the `OptBlock`, including its own length and the lengths of all
