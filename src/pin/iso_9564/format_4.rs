@@ -1,3 +1,67 @@
+//! Module for Encoding, Encrypting, and Decrypting of PIN Blocks in ISO 9564 Format 4.
+//!
+//! This module provides functionalities for handling PIN blocks in compliance with the ISO 9564
+//! format 4 standard. It offers methods for encoding a Personal Identification Number (PIN) with
+//! binding to a Primary Account Number (PAN) into a secure and encrypted PIN block, as well as
+//! decrypting and decoding an encoded PIN block to retrieve the original PIN. The encoding,
+//! encrypting, and decrypting processes are essential for secure PIN management in financial
+//! applications, particularly in areas like ATM and point-of-sale transactions.
+//!
+//! # Features
+//!
+//! - **Encoding and Encrypting of PIN and PAN**: This module allows for encoding a PIN and a PAN
+//! into a 16-byte PIN block and encrypting it using AES. The encoding process includes setting a
+//! control field, encoding the PIN length and digits in Binary Coded Decimal (BCD), and padding
+//! with specific values. The second half of the block is filled with a provided random seed.
+//!
+//! - **Decrypting and Decoding of PIN Blocks**: The module also supports decrypting and decoding
+//! of encrypted PIN blocks to extract the original PIN. This process is vital for systems that
+//! need to verify or process the PIN at various stages of a transaction.
+//!
+//! # Example Usage
+//!
+//! ```
+//! use paysec::pin::{encipher_pinblock_iso_4, decipher_pinblock_iso_4};
+//! use hex;
+//!
+//! // Example data for PIN, PAN, random seed, and AES key
+//! let key = hex::decode("00112233445566778899AABBCCDDEEFF").expect("Invalid key hex");
+//! let pin = "1234";
+//! let pan = "1234567890123456789";
+//! let rnd_seed = vec![0xFF; 8];
+//!
+//! // Encrypting the PIN block
+//! let encrypted_pin_block = encipher_pinblock_iso_4(&key, pin, pan, rnd_seed).expect("Failed to encipher pinblock");
+//! let encrypted_pin_block_hex = hex::encode(encrypted_pin_block.clone()).to_uppercase();
+//!
+//! // Expected encrypted PIN block in hexadecimal format
+//! let expected_pinblock = "28B41FDDD29B743E93124BD8E32D921E";
+//!
+//! // Asserting the encrypted PIN block matches the expected result
+//! assert_eq!(encrypted_pin_block_hex, expected_pinblock, "Failed test for PIN: {}, PAN: {}", pin, pan);
+//!
+//! // Decrypting the PIN block
+//! let decrypted_pin = decipher_pinblock_iso_4(&key, &encrypted_pin_block, pan).expect("Failed to decipher pinblock");
+//!
+//! // Asserting the decrypted PIN matches the original PIN
+//! assert_eq!( decrypted_pin, pin, "Deciphered PIN does not match expected PIN");
+//! ```
+//!
+//! # Disclaimer
+//!
+//! - This library is provided "as is", with no warranty or guarantees regarding its security or
+//! effectiveness in a production environment.
+//!
+//! # Note
+//!
+//! - This implementation is suitable for testing and generating test data. It's not intended for
+//!   use in production environments, especially where Hardware Security Modules (HSMs) are required.
+//! - The random seed must be provided externally, and the library does not assess the quality of
+//!   entropy.
+//! - For cryptographic operations, this library uses the `soft-aes` crate, which lacks
+//!   protections against side-channel attacks. In production, a HSM should be used for cryptographic
+//!   operations and random number generation.
+
 use crate::utils::{left_pad_str, right_pad_str, xor_byte_arrays};
 
 use soft_aes::aes::{aes_dec_ecb, aes_enc_ecb};
