@@ -1,6 +1,6 @@
 [package]
 name = "paysec"
-version = "0.0.2"
+version = "0.1.0"
 edition = "2021"
 authors = ["David Schmid <david.schmid@mailbox.org>"]
 description = "Rust library related to payment security standards."
@@ -9,4 +9,4 @@ repository = "https://github.com/5n00py/paysec"
 
 [dependencies]
 hex = "0.4.3"
-soft-aes = "0.1.0"
+soft-aes = "0.2.2"

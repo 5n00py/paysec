@@ -1,3 +1,73 @@
+//! Module for Encoding and Decoding of PIN Blocks in ISO 9564 Format 3.
+//!
+//! This module provides functionalities for handling PIN blocks in compliance with the ISO 9564
+//! format 3 standard. It offers methods for encoding a Personal Identification Number (PIN) with
+//! bindint to a Primary Account Number (PAN) into a secure PIN block, as well as decoding an
+//! encoded PIN block to retrieve the original PIN. The encoding and decoding processes are
+//! essential for secure PIN management in financial applications, particularly in the areas of ATM
+//! and point-of-sale transactions.
+//!
+//! # Features
+//!
+//! - **Encoding of PIN and PAN**: This module allows for encoding a PIN and a PAN into an 8-byte PIN block.
+//!   The PIN is encoded with additional security measures, including a control field, BCD encoding, and padding
+//!   with hexadecimal characters derived from a random seed.
+//!
+//! - **Decoding of PIN Blocks**: The module also supports decoding of encoded PIN blocks to extract the original PIN.
+//!   This process is vital for systems that need to verify or process the PIN at various stages of a transaction.
+//!
+//! - **Support for Custom Random Seeds**: For testing purposes, the module allows the use of custom random seeds
+//!   for generating part of the PIN field during the encoding process.
+//!
+//! # Example Usage
+//!
+//! ```
+//! use paysec::pin::{encode_pinblock_iso_3, decode_pinblock_iso_3};
+//! use hex;
+//!
+//! // Example data for PIN, PAN, and random seed
+//! let pin = "1234";
+//! let pan = "12345678901234";
+//! let rnd_seed = vec![0xFF; 8];
+//!
+//! // Encoding the PIN block
+//! let pin_block = encode_pinblock_iso_3(pin, pan, rnd_seed.clone()).unwrap();
+//! let pin_block_hex = hex::encode_upper(pin_block);
+//!
+//! // Expected encoded PIN block in hexadecimal format
+//! let expected_pinblock = "341217BA9876FEDC";
+//!
+//! // Asserting the encoded PIN block matches the expected result
+//! assert_eq!(
+//!     pin_block_hex, expected_pinblock,
+//!     "Failed test for PIN: {}, PAN: {}",
+//!     pin, pan
+//! );
+//!
+//! // Decoding the PIN block
+//! let decoded_pin =
+//!     decode_pinblock_iso_3(&pin_block, pan).expect("Failed to decode PIN block");
+//!
+//! // Asserting the decoded PIN matches the original PIN
+//! assert_eq!(
+//!     decoded_pin, pin,
+//!     "Decoded PIN does not match for PIN: {}, PAN: {}",
+//!     pin, pan
+//! );
+//! ```
+//!
+//! # Disclaimer
+//!
+//! - This library is provided "as is", with no warranty or guarantees regarding its security or
+//!   effectiveness in a production environment.
+//!
+//! # Note
+//!
+//! - This implementation is suitable for testing and generating test data. It's not intended for
+//!   use in production environments, especially where Hardware Security Modules (HSMs) are required.
+//! - The random seed must be provided externally, and the library does not assess the quality of
+//!   entropy.
+
 use crate::utils::{transform_nibbles_to_af, xor_byte_arrays};
 use std::error::Error;
 
