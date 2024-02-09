@@ -23,6 +23,17 @@ is limited. It is crucial to integrate additional security measures and
 hardware capabilities when deploying solutions in a real-world, high-security
 context.
 
+## Table of Contents
+- [Features](#features)
+- [Usage](#usage)
+  - [Installation](#installation)
+  - [Documentation and Examples](#documentation-and-examples)
+- [Related Projects](#related-projects)
+  - [PIN Block Web Tool](#pin-block-web-tool)
+  - [Key Block Web Tool](#key-block-web-tool)
+- [Future Developments](#future-developments)
+- [Copyright and License Information](#copyright-and-license-information)
+
 ## Features
 
 `paysec` provides functionalities aligned with the payment security standards,
@@ -76,7 +87,7 @@ Alternatively, you can manually add the following line to your `Cargo.toml`
 file under `[dependencies]`:
 
 ```toml 
-paysec = "0.1.0" 
+paysec = "0.1.1" 
 ```
 
 ### Documentation and Examples
@@ -89,7 +100,7 @@ clear impression of how to use the modules effectively.
 Additionally, detailed documentation, including API references and more
 examples, is available on the Rust docs website. Please visit the `paysec`
 documentation page at
-[https://docs.rs/paysec/0.1.0/paysec/index.html](https://docs.rs/paysec/0.1.0/paysec/index.html).
+[https://docs.rs/paysec/0.1.1/paysec/index.html](https://docs.rs/paysec/0.1.0/paysec/index.html).
 
 ## Related Projects
 
@@ -101,14 +112,25 @@ user-friendly interface to generate test data based on ISO 9564 PIN Blocks. The
 tools demonstrates the versatility of the `paysec` library and its potential
 applications in web-based environments through WebAssembly.
 
+### Key Block Web Tool
+
+The [Key Block Web Tool](https://www.jointech.at/tools/keyblock/index.html)
+offers another web interface based on this library to have a more convenient
+interface for key block testing and to exemplify the use of the TR-31 module. 
+
 ## Future Developments 
 
 `paysec` is actively being developed with plans to include more payment
 security features such as:
 - Integration with popular payment gateways and protocols.
 - An asymmetric keyblock protection formats (TR-34)
+- ANSI X9.143 and ISO 20038 extensions for TR-31
+- Other TR-31 versions (A, B, C) on request.
 - CVV Card Verification Value generation
 - EMV related cryptography
+- Key Management Web Interface (potentially as separate project based on the
+  Wasm binding)
+- HSM simulator interface
 
 ## Copyright and License Information
 
