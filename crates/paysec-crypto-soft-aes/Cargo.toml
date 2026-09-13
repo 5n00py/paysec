@@ -1,0 +1,16 @@
+[package]
+name = "paysec-crypto-soft-aes"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "soft-aes cryptographic provider for paysec."
+
+[dependencies]
+paysec-crypto.workspace = true
+soft-aes.workspace = true
+
+[dev-dependencies]
+hex.workspace = true

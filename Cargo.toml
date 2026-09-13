@@ -1,6 +1,8 @@
 [workspace]
 members = [
     "crates/paysec",
+    "crates/paysec-crypto",
+    "crates/paysec-crypto-soft-aes",
     "crates/paysec-pinblock",
     "crates/paysec-keyblock",
 ]
@@ -18,12 +20,22 @@ repository = "https://github.com/5n00py/paysec"
 hex = "0.4.3"
 soft-aes = "0.2.2"
 
+paysec-crypto = {
+    version = "0.2.0",
+    path = "crates/paysec-crypto",
+}
+
+paysec-crypto-soft-aes = {
+    version = "0.2.0",
+    path = "crates/paysec-crypto-soft-aes",
+}
+
 paysec-pinblock = {
-version = "0.2.0",
-path = "crates/paysec-pinblock",
+    version = "0.2.0",
+    path = "crates/paysec-pinblock",
 }
 
 paysec-keyblock = {
-version = "0.2.0",
-path = "crates/paysec-keyblock",
+    version = "0.2.0",
+    path = "crates/paysec-keyblock",
 }
