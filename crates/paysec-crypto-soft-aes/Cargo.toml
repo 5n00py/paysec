@@ -6,7 +6,16 @@ rust-version.workspace = true
 authors.workspace = true
 license.workspace = true
 repository.workspace = true
-description = "soft-aes cryptographic provider for paysec."
+
+description = "Software AES cryptographic provider for paysec based on soft-aes."
+documentation = "https://docs.rs/paysec-crypto-soft-aes"
+keywords = [
+    "payments",
+    "cryptography",
+    "aes",
+    "soft-aes",
+]
+categories = ["cryptography"]
 
 [dependencies]
 paysec-crypto.workspace = true

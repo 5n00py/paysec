@@ -6,7 +6,16 @@ rust-version.workspace = true
 authors.workspace = true
 license.workspace = true
 repository.workspace = true
-description = "PIN block functionality for payment security standards."
+
+description = "ISO 9564 PIN block processing for payment security applications."
+documentation = "https://docs.rs/paysec-pinblock"
+keywords = [
+    "payments",
+    "payment-security",
+    "pin-block",
+    "iso9564",
+]
+categories = ["cryptography"]
 
 [dependencies]
 hex.workspace = true

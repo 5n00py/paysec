@@ -6,7 +6,17 @@ rust-version.workspace = true
 authors.workspace = true
 license.workspace = true
 repository.workspace = true
-description = "Rust library related to payment security standards."
+
+description = "Payment security standards library for PIN blocks and TR-31 key blocks."
+documentation = "https://docs.rs/paysec"
+keywords = [
+    "payments",
+    "payment-security",
+    "pin-block",
+    "tr31",
+    "cryptography",
+]
+categories = ["cryptography"]
 
 [dependencies]
 paysec-pinblock.workspace = true

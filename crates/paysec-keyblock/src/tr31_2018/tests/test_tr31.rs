@@ -2,10 +2,7 @@ use super::super::KeyBlockHeader;
 use super::super::OptBlock;
 use super::super::tr31::*;
 
-use crate::{
-    Tr31CryptoError,
-    Tr31Error,
-};
+use crate::{Tr31CryptoError, Tr31Error};
 
 use paysec_crypto::AesKeySize;
 use paysec_crypto_rustcrypto::RustCryptoProvider;

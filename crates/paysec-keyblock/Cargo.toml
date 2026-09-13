@@ -6,7 +6,17 @@ rust-version.workspace = true
 authors.workspace = true
 license.workspace = true
 repository.workspace = true
-description = "Key block functionality for payment security standards."
+
+description = "TR-31 key block processing for payment security applications."
+documentation = "https://docs.rs/paysec-keyblock"
+keywords = [
+    "payments",
+    "payment-security",
+    "key-block",
+    "tr31",
+    "cryptography",
+]
+categories = ["cryptography"]
 
 [dependencies]
 hex.workspace = true

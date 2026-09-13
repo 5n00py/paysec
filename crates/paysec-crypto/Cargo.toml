@@ -6,4 +6,12 @@ rust-version.workspace = true
 authors.workspace = true
 license.workspace = true
 repository.workspace = true
-description = "Cryptographic provider interfaces for paysec."
+
+description = "Cryptographic provider interfaces for the paysec payment security libraries."
+documentation = "https://docs.rs/paysec-crypto"
+keywords = [
+    "payments",
+    "payment-security",
+    "cryptography",
+]
+categories = ["cryptography"]

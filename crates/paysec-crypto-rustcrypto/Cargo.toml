@@ -6,7 +6,16 @@ rust-version.workspace = true
 authors.workspace = true
 license.workspace = true
 repository.workspace = true
-description = "RustCrypto cryptographic provider for paysec."
+
+description = "RustCrypto AES cryptographic provider for paysec."
+documentation = "https://docs.rs/paysec-crypto-rustcrypto"
+keywords = [
+    "payments",
+    "cryptography",
+    "aes",
+    "rustcrypto",
+]
+categories = ["cryptography"]
 
 [dependencies]
 aes.workspace = true
