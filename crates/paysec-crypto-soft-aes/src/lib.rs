@@ -1,7 +1,7 @@
 use std::error::Error;
 use std::fmt::{Display, Formatter};
 
-use paysec_crypto::{AesBlockCipher, AesCbc, AesCmac, CryptoProvider};
+use paysec_crypto::{AesBlockCipher, AesCbc, AesCmac, AesCmacKeyDerivation, CryptoProvider};
 use soft_aes::aes::{aes_cmac, aes_dec_block, aes_dec_cbc, aes_enc_block, aes_enc_cbc};
 
 #[derive(Debug, Default, Clone, Copy)]
@@ -16,6 +16,14 @@ impl SoftAesProvider {
 #[derive(Debug)]
 pub struct SoftAesError {
     message: String,
+}
+
+impl SoftAesError {
+    fn new(message: impl Into<String>) -> Self {
+        Self {
+            message: message.into(),
+        }
+    }
 }
 
 impl Display for SoftAesError {
@@ -74,6 +82,37 @@ impl AesCmac<[u8]> for SoftAesProvider {
     }
 }
 
+impl AesCmacKeyDerivation<[u8]> for SoftAesProvider {
+    type DerivedKey = Vec<u8>;
+
+    fn derive_key_cmac(
+        &self,
+        key: &[u8],
+        derivation_inputs: &[&[u8]],
+        output_len: usize,
+    ) -> Result<Self::DerivedKey, Self::Error> {
+        let available_len = derivation_inputs.len() * 16;
+
+        if output_len > available_len {
+            return Err(SoftAesError::new(
+                "insufficient CMAC output for requested derived key length",
+            ));
+        }
+
+        let mut derived_key = Vec::with_capacity(available_len);
+
+        for input in derivation_inputs {
+            let block = aes_cmac(input, key).map_err(SoftAesError::from)?;
+
+            derived_key.extend_from_slice(&block);
+        }
+
+        derived_key.truncate(output_len);
+
+        Ok(derived_key)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -119,5 +158,31 @@ mod tests {
         let mac = provider.calculate_cmac(&key, &message).unwrap();
 
         assert_eq!(mac, expected);
+    }
+}
+
+impl AesCbc<Vec<u8>> for SoftAesProvider {
+    fn encrypt_cbc(
+        &self,
+        key: &Vec<u8>,
+        iv: &[u8; 16],
+        plaintext: &[u8],
+    ) -> Result<Vec<u8>, Self::Error> {
+        aes_enc_cbc(plaintext, key.as_slice(), iv, None).map_err(SoftAesError::from)
+    }
+
+    fn decrypt_cbc(
+        &self,
+        key: &Vec<u8>,
+        iv: &[u8; 16],
+        ciphertext: &[u8],
+    ) -> Result<Vec<u8>, Self::Error> {
+        aes_dec_cbc(ciphertext, key.as_slice(), iv, None).map_err(SoftAesError::from)
+    }
+}
+
+impl AesCmac<Vec<u8>> for SoftAesProvider {
+    fn calculate_cmac(&self, key: &Vec<u8>, message: &[u8]) -> Result<[u8; 16], Self::Error> {
+        aes_cmac(message, key.as_slice()).map_err(SoftAesError::from)
     }
 }
