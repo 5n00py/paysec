@@ -13,4 +13,5 @@ hex.workspace = true
 paysec-crypto.workspace = true
 
 [dev-dependencies]
+paysec-crypto-rustcrypto.workspace = true
 paysec-crypto-soft-aes.workspace = true

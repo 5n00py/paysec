@@ -1,6 +1,22 @@
 use crate::*;
+
 use hex::decode;
+use paysec_crypto_rustcrypto::RustCryptoProvider;
 use paysec_crypto_soft_aes::SoftAesProvider;
+
+macro_rules! for_each_crypto_provider {
+    ($provider:ident, $body:block) => {{
+        {
+            let $provider = SoftAesProvider::new();
+            $body
+        }
+
+        {
+            let $provider = RustCryptoProvider::new();
+            $body
+        }
+    }};
+}
 
 #[test]
 fn test_encode_pin_field_iso_4_various_pins() {
@@ -84,6 +100,7 @@ fn test_encode_pin_field_iso_4_too_short() {
     let result = encode_pin_field_iso_4(pin, rnd_seed);
 
     assert!(result.is_err());
+
     assert_eq!(
         result.unwrap_err().to_string(),
         "PIN BLOCK ISO 4 ERROR: PIN must be between 4 and 12 digits long"
@@ -98,6 +115,7 @@ fn test_encode_pin_field_iso_4_too_long() {
     let result = encode_pin_field_iso_4(pin, rnd_seed);
 
     assert!(result.is_err());
+
     assert_eq!(
         result.unwrap_err().to_string(),
         "PIN BLOCK ISO 4 ERROR: PIN must be between 4 and 12 digits long"
@@ -229,6 +247,7 @@ fn test_encode_pan_field_iso_4_too_short() {
     let result = encode_pan_field_iso_4("");
 
     assert!(result.is_err());
+
     assert_eq!(
         result.unwrap_err().to_string(),
         "PIN BLOCK ISO 4 ERROR: PAN must be between 1 and 19 digits long."
@@ -240,6 +259,7 @@ fn test_encode_pan_field_iso_4_too_long() {
     let result = encode_pan_field_iso_4("12345678901234567890");
 
     assert!(result.is_err());
+
     assert_eq!(
         result.unwrap_err().to_string(),
         "PIN BLOCK ISO 4 ERROR: PAN must be between 1 and 19 digits long."
@@ -251,6 +271,7 @@ fn test_encode_pan_field_iso_4_invalid_char() {
     let result = encode_pan_field_iso_4("123456789x123456789");
 
     assert!(result.is_err());
+
     assert_eq!(
         result.unwrap_err().to_string(),
         "PIN BLOCK ISO 4 ERROR: PAN must be between 1 and 19 digits long."
@@ -259,58 +280,59 @@ fn test_encode_pan_field_iso_4_invalid_char() {
 
 #[test]
 fn test_encipher_pinblock_iso_4_valid() {
-    let provider = SoftAesProvider::new();
+    for_each_crypto_provider!(provider, {
+        let key = decode("00112233445566778899AABBCCDDEEFF").expect("Invalid key hex");
 
-    let key = decode("00112233445566778899AABBCCDDEEFF").expect("Invalid key hex");
+        let pin = "1234";
+        let pan = "1234567890123456789";
 
-    let pin = "1234";
-    let pan = "1234567890123456789";
-    let rnd_seed = vec![0xFF; 8];
+        let rnd_seed = vec![0xFF; 8];
 
-    let expected_pin_block = "28B41FDDD29B743E93124BD8E32D921E";
+        let expected_pin_block = "28B41FDDD29B743E93124BD8E32D921E";
 
-    let result = encipher_pinblock_iso_4(&provider, key.as_slice(), pin, pan, rnd_seed)
-        .expect("Failed to encipher PIN block");
+        let result = encipher_pinblock_iso_4(&provider, key.as_slice(), pin, pan, rnd_seed)
+            .expect("Failed to encipher PIN block");
 
-    let result_hex = hex::encode(result).to_uppercase();
+        let result_hex = hex::encode_upper(result);
 
-    assert_eq!(result_hex, expected_pin_block);
+        assert_eq!(result_hex, expected_pin_block,);
+    });
 }
 
 #[test]
 fn test_decipher_pinblock_iso_4_various() {
-    let provider = SoftAesProvider::new();
+    for_each_crypto_provider!(provider, {
+        let key = decode("00112233445566778899AABBCCDDEEFF").expect("Invalid key hex");
 
-    let key = decode("00112233445566778899AABBCCDDEEFF").expect("Invalid key hex");
+        let test_cases = [
+            (
+                "1234",
+                "1234567890123456",
+                "52DB178C6EDCE52E3A70F7FBC8E9C758",
+            ),
+            (
+                "123456",
+                "123456789012345678",
+                "847A0209C659E4C4A79CA6A2A2217D31",
+            ),
+            (
+                "12345678",
+                "1234567890123456789",
+                "018BFEC8B5EF60181A327AD8325A2BA4",
+            ),
+        ];
 
-    let test_cases = [
-        (
-            "1234",
-            "1234567890123456",
-            "52DB178C6EDCE52E3A70F7FBC8E9C758",
-        ),
-        (
-            "123456",
-            "123456789012345678",
-            "847A0209C659E4C4A79CA6A2A2217D31",
-        ),
-        (
-            "12345678",
-            "1234567890123456789",
-            "018BFEC8B5EF60181A327AD8325A2BA4",
-        ),
-    ];
+        for (expected_pin, pan, encrypted_pin_block_hex) in test_cases {
+            let encrypted_pin_block = decode(encrypted_pin_block_hex).unwrap();
 
-    for (expected_pin, pan, encrypted_pin_block_hex) in test_cases {
-        let encrypted_pin_block = decode(encrypted_pin_block_hex).unwrap();
+            let decrypted_pin =
+                decipher_pinblock_iso_4(&provider, key.as_slice(), &encrypted_pin_block, pan)
+                    .expect("Failed to decipher PIN block");
 
-        let decrypted_pin =
-            decipher_pinblock_iso_4(&provider, key.as_slice(), &encrypted_pin_block, pan)
-                .expect("Failed to decipher PIN block");
-
-        assert_eq!(
-            decrypted_pin, expected_pin,
-            "Deciphered PIN does not match expected PIN"
-        );
-    }
+            assert_eq!(
+                decrypted_pin, expected_pin,
+                "Deciphered PIN does not match expected PIN"
+            );
+        }
+    });
 }
