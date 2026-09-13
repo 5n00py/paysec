@@ -1,13 +1,29 @@
-[package]
-name = "paysec"
+[workspace]
+members = [
+    "crates/paysec",
+    "crates/paysec-pinblock",
+    "crates/paysec-keyblock",
+]
+resolver = "3"
+
+[workspace.package]
 version = "0.2.0"
 edition = "2024"
 rust-version = "1.89"
 authors = ["David Schmid <david.schmid@mailbox.org>"]
-description = "Rust library related to payment security standards."
 license = "GPL-3.0"
 repository = "https://github.com/5n00py/paysec"
 
-[dependencies]
+[workspace.dependencies]
 hex = "0.4.3"
 soft-aes = "0.2.2"
+
+paysec-pinblock = {
+version = "0.2.0",
+path = "crates/paysec-pinblock",
+}
+
+paysec-keyblock = {
+version = "0.2.0",
+path = "crates/paysec-keyblock",
+}

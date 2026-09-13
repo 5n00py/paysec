@@ -1,0 +1,13 @@
+[package]
+name = "paysec"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Rust library related to payment security standards."
+
+[dependencies]
+paysec-pinblock.workspace = true
+paysec-keyblock.workspace = true

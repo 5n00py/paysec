@@ -78,8 +78,8 @@
 //!
 //! # Example 1: Wrapping and Unwrapping a Key:
 //! ```
-//! use paysec::keyblock::{tr31_wrap, tr31_unwrap};
-//! use paysec::keyblock::{KeyBlockHeader, OptBlock};
+//! use paysec_keyblock::{tr31_wrap, tr31_unwrap};
+//! use paysec_keyblock::{KeyBlockHeader, OptBlock};
 //! use hex;
 //!
 //! // Step 1: Building a Header
@@ -124,7 +124,7 @@
 //!
 //! # Example 2: Wrapping and Unwrapping a Key with a Header String:
 //! ```
-//! use paysec::keyblock::{tr31_wrap_with_header_string, tr31_unwrap};
+//! use paysec_keyblock::{tr31_wrap_with_header_string, tr31_unwrap};
 //! use hex;
 //!
 //! // Using a header string directly instead of a KeyBlockHeader instance.
@@ -165,8 +165,8 @@
 //! including the addition of a padding block to finalize the header.
 //!
 //! ```
-//! use paysec::keyblock::{tr31_wrap, tr31_unwrap};
-//! use paysec::keyblock::{KeyBlockHeader, OptBlock};
+//! use paysec_keyblock::{tr31_wrap, tr31_unwrap};
+//! use paysec_keyblock::{KeyBlockHeader, OptBlock};
 //! use hex;
 //!
 //! // Creating a header with one optional block.

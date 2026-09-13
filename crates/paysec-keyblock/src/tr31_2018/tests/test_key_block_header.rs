@@ -1,4 +1,4 @@
-use crate::keyblock::*;
+use crate::*;
 
 #[test]
 fn test_new_empty() {

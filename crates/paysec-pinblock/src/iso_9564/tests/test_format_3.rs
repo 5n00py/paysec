@@ -1,4 +1,4 @@
-use crate::pin::*;
+use crate::*;
 use hex::FromHex;
 
 #[test]

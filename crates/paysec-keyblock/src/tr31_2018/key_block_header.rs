@@ -42,8 +42,8 @@
 //! # Example
 //!
 //! ```
-//! use paysec::keyblock::KeyBlockHeader;
-//! use paysec::keyblock::OptBlock;
+//! use paysec_keyblock::KeyBlockHeader;
+//! use paysec_keyblock::OptBlock;
 //!
 //! // Example of creating a new KeyBlockHeader with an optional block
 //! let mut header = KeyBlockHeader::new_with_values("D", "P0", "A", "E", "00", "E").unwrap();

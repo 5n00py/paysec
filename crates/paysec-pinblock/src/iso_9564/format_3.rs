@@ -22,7 +22,7 @@
 //! # Example Usage
 //!
 //! ```
-//! use paysec::pin::{encode_pinblock_iso_3, decode_pinblock_iso_3};
+//! use paysec_pinblock::{encode_pinblock_iso_3, decode_pinblock_iso_3};
 //! use hex;
 //!
 //! // Example data for PIN, PAN, and random seed

@@ -23,7 +23,7 @@
 //! # Example Usage
 //!
 //! ```
-//! use paysec::keyblock::OptBlock;
+//! use paysec_keyblock::OptBlock;
 //!
 //! // Creating a new OptBlock with an identifier, data, and no subsequent blocks
 //! let opt_block = OptBlock::new("CT", "ExampleData", None);

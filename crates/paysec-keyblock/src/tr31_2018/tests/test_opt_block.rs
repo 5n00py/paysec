@@ -1,4 +1,4 @@
-use crate::keyblock::*;
+use crate::*;
 use std::fmt::Write;
 
 #[test]

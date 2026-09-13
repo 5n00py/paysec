@@ -21,7 +21,7 @@
 //! # Example Usage
 //!
 //! ```
-//! use paysec::pin::{encipher_pinblock_iso_4, decipher_pinblock_iso_4};
+//! use paysec_pinblock::{encipher_pinblock_iso_4, decipher_pinblock_iso_4};
 //! use hex;
 //!
 //! // Example data for PIN, PAN, random seed, and AES key
