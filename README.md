@@ -113,41 +113,47 @@ No HSM provider is currently included in this repository.
 
 ## Installation
 
-Version `0.2.0` is currently available from the GitHub repository and has not
-yet been published to crates.io.
+The `paysec` workspace is published on crates.io as a set of focused crates.
 
-The `0.1.0` release currently available on crates.io represents the previous
-single-crate architecture and does not provide the workspace and provider APIs
-described in this README.
-
-To use the current version directly from GitHub:
+For the main facade crate:
 
 ```toml
 [dependencies]
-paysec = { git = "https://github.com/5n00py/paysec" }
-paysec-crypto-rustcrypto = { git = "https://github.com/5n00py/paysec" }
+paysec = "0.2"
 ```
 
-Alternatively, select the individual crates you need:
+Cryptographic operations use a provider implementation. For example, to use
+the RustCrypto-based provider:
 
 ```toml
 [dependencies]
-paysec-pinblock = { git = "https://github.com/5n00py/paysec" }
-paysec-keyblock = { git = "https://github.com/5n00py/paysec" }
-paysec-crypto = { git = "https://github.com/5n00py/paysec" }
-paysec-crypto-rustcrypto = { git = "https://github.com/5n00py/paysec" }
+paysec = "0.2"
+paysec-crypto-rustcrypto = "0.2"
 ```
 
-The `soft-aes` reference provider can be selected instead when appropriate:
+The `soft-aes` provider is also available:
 
 ```toml
 [dependencies]
-paysec = { git = "https://github.com/5n00py/paysec" }
-paysec-crypto-soft-aes = { git = "https://github.com/5n00py/paysec" }
+paysec = "0.2"
+paysec-crypto-soft-aes = "0.2"
 ```
 
-After the `0.2.0` workspace crates are published to crates.io, these Git
-dependencies can be replaced with normal versioned Cargo dependencies.
+Applications that do not need the facade crate can depend directly on the
+individual workspace crates:
+
+```toml
+[dependencies]
+paysec-pinblock = "0.2"
+paysec-keyblock = "0.2"
+paysec-crypto = "0.2"
+paysec-crypto-rustcrypto = "0.2"
+```
+
+The provider abstraction is designed so that cryptographic backends can use
+different key representations. The included software providers operate on raw
+key material, while future providers can use opaque key handles such as those
+provided by an HSM.
 
 ## ISO 9564 Format 4 Example
 
