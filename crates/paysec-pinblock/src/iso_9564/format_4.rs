@@ -9,8 +9,8 @@
 //! implementing [`paysec_crypto::AesBlockCipher`].
 //!
 //! This allows callers to select an appropriate cryptographic backend, such as
-//! a software implementation for testing or, in the future, a provider backed
-//! by an HSM or another cryptographic service.
+//! a software implementation for testing or a provider backed by an HSM or
+//! another cryptographic service.
 //!
 //! # Operations
 //!
@@ -31,6 +31,20 @@
 //! 5. Encrypt the XOR result with AES.
 //!
 //! Deciphering performs the corresponding operations in reverse.
+//!
+//! # PIN Handling
+//!
+//! PIN values supplied for encoding and enciphering are accepted as `&str`
+//! and validated before use.
+//!
+//! Plaintext PIN values produced by decoding or deciphering are returned as
+//! [`crate::Pin`]. The `Pin` type:
+//!
+//! - guarantees that the value contains between 4 and 12 ASCII decimal digits,
+//! - redacts its contents from debug output,
+//! - zeroizes its owned string when dropped,
+//! - requires explicit access through [`crate::Pin::expose_secret`] when the
+//!   plaintext PIN digits are needed.
 //!
 //! # Example
 //!
@@ -75,7 +89,10 @@
 //! )
 //! .expect("Failed to decipher PIN block");
 //!
-//! assert_eq!(decrypted_pin, pin);
+//! assert_eq!(
+//!     decrypted_pin.expose_secret(),
+//!     pin,
+//! );
 //! ```
 //!
 //! # Security
@@ -84,20 +101,37 @@
 //! prescribe a concrete cryptographic implementation.
 //!
 //! The security properties of AES operations therefore depend on the selected
-//! [`paysec_crypto::AesBlockCipher`] provider.
+//! [`paysec_crypto::AesBlockCipher`] provider. A software provider may operate
+//! directly on raw key material in process memory, while an HSM-backed
+//! provider may instead operate on opaque key handles.
+//!
+//! Plaintext PIN values returned by decoding or deciphering are held in
+//! [`crate::Pin`]. The wrapper redacts debug output and zeroizes its owned
+//! string when dropped.
+//!
+//! Temporary plaintext PIN-field buffers created internally during enciphering
+//! and deciphering are also zeroized when they leave scope.
+//!
+//! These protections provide defense in depth against accidental disclosure
+//! and residual process-memory contents. They do not guarantee that the PIN
+//! has never existed elsewhere in memory. For example, callers may retain
+//! additional plaintext copies, and operating-system facilities such as swap,
+//! crash dumps, or process-memory inspection are outside the scope of this
+//! crate.
 //!
 //! The caller is also responsible for providing the random data used when
 //! encoding the PIN field. This module does not generate randomness or assess
 //! the entropy quality of the supplied random seed.
 //!
-//! This library is primarily intended for payment-security tooling, testing,
-//! and test-data generation. Production use should employ an appropriately
-//! secured cryptographic implementation, such as an HSM where required.
+//! Production use should employ a cryptographic provider and deployment model
+//! appropriate for the applicable payment-security requirements.
 
 use crate::utils::{left_pad_str, right_pad_str};
-use crate::{PinBlockCryptoError, PinBlockError};
+use crate::{Pin, PinBlockCryptoError, PinBlockError};
 
 use paysec_crypto::AesBlockCipher;
+
+use zeroize::Zeroizing;
 
 const ISO4_PIN_BLOCK_LENGTH: usize = 16;
 const ISO4_RANDOM_SEED_LENGTH: usize = 8;
@@ -117,7 +151,7 @@ const ISO4_RANDOM_SEED_LENGTH: usize = 8;
 ///
 /// # Parameters
 ///
-/// * `pin` - ASCII-encoded PIN consisting of 4 to 12 numeric digits.
+/// * `pin` - ASCII-encoded PIN consisting of 4 to 12 decimal digits.
 /// * `rnd_seed` - Random data used for the second half of the PIN field.
 ///   At least 8 bytes must be supplied.
 ///
@@ -127,11 +161,17 @@ const ISO4_RANDOM_SEED_LENGTH: usize = 8;
 ///
 /// # Errors
 ///
-/// Returns [`PinBlockError::InvalidPin`] if the PIN is not between 4 and 12
-/// ASCII digits.
+/// Returns [`PinBlockError::InvalidPin`] if `pin` does not contain between
+/// 4 and 12 ASCII decimal digits.
 ///
 /// Returns [`PinBlockError::RandomSeedTooShort`] if fewer than eight random
 /// bytes are supplied.
+///
+/// # Security
+///
+/// This function accepts the PIN as a borrowed string and does not take
+/// ownership of or zeroize the caller's input. The caller remains responsible
+/// for the lifecycle of the supplied plaintext PIN.
 pub fn encode_pin_field_iso_4(
     pin: &str,
     rnd_seed: Vec<u8>,
@@ -172,8 +212,8 @@ pub fn encode_pin_field_iso_4(
 
 /// Decode a PIN from an ISO 9564 format 4 PIN field.
 ///
-/// The function validates the format identifier, PIN length, PIN digits, and
-/// filler nibbles before returning the decoded PIN.
+/// The function validates the format identifier, encoded PIN length, PIN
+/// digits, and filler nibbles before returning the decoded PIN.
 ///
 /// # Parameters
 ///
@@ -182,13 +222,22 @@ pub fn encode_pin_field_iso_4(
 ///
 /// # Returns
 ///
-/// The decoded PIN as a [`String`].
+/// The decoded plaintext PIN as a [`Pin`].
+///
+/// The returned `Pin` redacts its contents from debug output and zeroizes its
+/// owned string when dropped. Call [`Pin::expose_secret`] when explicit access
+/// to the plaintext PIN digits is required.
 ///
 /// # Errors
 ///
-/// Returns a [`PinBlockError`] if the PIN field has an invalid length,
-/// control field, encoded PIN length, PIN digit, or filler nibble.
-pub fn decode_pin_field_iso_4(pin_field: &[u8]) -> Result<String, PinBlockError> {
+/// Returns a [`PinBlockError`] if:
+///
+/// - the PIN field is not exactly 16 bytes long,
+/// - the control field does not identify ISO format 4,
+/// - the encoded PIN length is outside the range 4 to 12,
+/// - an encoded PIN digit contains an invalid BCD value,
+/// - a filler nibble is not `0xA`.
+pub fn decode_pin_field_iso_4(pin_field: &[u8]) -> Result<Pin, PinBlockError> {
     if pin_field.len() != ISO4_PIN_BLOCK_LENGTH {
         return Err(PinBlockError::InvalidPinFieldLength {
             expected: ISO4_PIN_BLOCK_LENGTH,
@@ -212,8 +261,7 @@ pub fn decode_pin_field_iso_4(pin_field: &[u8]) -> Result<String, PinBlockError>
         return Err(PinBlockError::InvalidDecodedPinLength { actual: pin_len });
     }
 
-    let mut pin = String::with_capacity(pin_len);
-
+    // Validate all encoded PIN digits before constructing a plaintext String.
     for i in 0..pin_len {
         let digit = if i % 2 == 0 {
             pin_field[1 + i / 2] >> 4
@@ -224,8 +272,6 @@ pub fn decode_pin_field_iso_4(pin_field: &[u8]) -> Result<String, PinBlockError>
         if digit > 9 {
             return Err(PinBlockError::InvalidPinDigit);
         }
-
-        pin.push(char::from(b'0' + digit));
     }
 
     // All unused PIN-area nibbles must contain 0xA.
@@ -241,7 +287,22 @@ pub fn decode_pin_field_iso_4(pin_field: &[u8]) -> Result<String, PinBlockError>
         }
     }
 
-    Ok(pin)
+    // The complete field has now been validated. Construct the plaintext PIN
+    // only after all error-producing validation has succeeded.
+    let mut pin = String::with_capacity(pin_len);
+
+    for i in 0..pin_len {
+        let digit = if i % 2 == 0 {
+            pin_field[1 + i / 2] >> 4
+        } else {
+            pin_field[1 + i / 2] & 0x0F
+        };
+
+        pin.push(char::from(b'0' + digit));
+    }
+
+    // Move the plaintext String directly into the zeroizing Pin wrapper.
+    Pin::new(pin)
 }
 
 /// Encode a Primary Account Number into an ISO 9564 format 4 PAN field.
@@ -251,7 +312,7 @@ pub fn decode_pin_field_iso_4(pin_field: &[u8]) -> Result<String, PinBlockError>
 ///
 /// # Parameters
 ///
-/// * `pan` - ASCII-encoded PAN consisting of 1 to 19 numeric digits.
+/// * `pan` - ASCII-encoded PAN consisting of 1 to 19 decimal digits.
 ///
 /// # Returns
 ///
@@ -260,7 +321,7 @@ pub fn decode_pin_field_iso_4(pin_field: &[u8]) -> Result<String, PinBlockError>
 /// # Errors
 ///
 /// Returns [`PinBlockError::InvalidPan`] if the PAN is empty, longer than
-/// 19 digits, or contains a non-ASCII digit.
+/// 19 digits, or contains a non-ASCII decimal digit.
 ///
 /// Returns [`PinBlockError::Hex`] if hexadecimal decoding of the internally
 /// constructed PAN field fails.
@@ -303,8 +364,8 @@ pub fn encode_pan_field_iso_4(pan: &str) -> Result<[u8; ISO4_PIN_BLOCK_LENGTH], 
 ///
 /// * `provider` - Cryptographic provider used for AES block encryption.
 /// * `key` - Provider-specific AES key.
-/// * `pin` - ASCII-encoded PIN consisting of 4 to 12 numeric digits.
-/// * `pan` - ASCII-encoded PAN consisting of 1 to 19 numeric digits.
+/// * `pin` - ASCII-encoded PIN consisting of 4 to 12 decimal digits.
+/// * `pan` - ASCII-encoded PAN consisting of 1 to 19 decimal digits.
 /// * `rnd_seed` - Random data used when encoding the PIN field. At least
 ///   8 bytes must be supplied.
 ///
@@ -314,10 +375,20 @@ pub fn encode_pan_field_iso_4(pan: &str) -> Result<[u8; ISO4_PIN_BLOCK_LENGTH], 
 ///
 /// # Errors
 ///
-/// Returns [`PinBlockCryptoError::PinBlock`] if PIN or PAN processing fails.
+/// Returns [`PinBlockCryptoError::PinBlock`] if PIN or PAN validation or
+/// encoding fails.
 ///
 /// Returns [`PinBlockCryptoError::Crypto`] if the cryptographic provider
-/// reports an encryption error.
+/// reports an AES encryption error.
+///
+/// # Security
+///
+/// The plaintext PIN is borrowed from the caller and is not owned or zeroized
+/// by this function. The internally encoded plaintext PIN field is zeroized
+/// when it leaves scope.
+///
+/// Provider-managed AES keys retain the security properties of the selected
+/// cryptographic provider.
 pub fn encipher_pinblock_iso_4<P, K: ?Sized>(
     provider: &P,
     key: &K,
@@ -329,20 +400,20 @@ where
     P: AesBlockCipher<K>,
 {
     // Step 1: Encode PIN and PAN fields.
-    let pin_field = encode_pin_field_iso_4(pin, rnd_seed)?;
+    //
+    // The PIN field contains plaintext PIN-derived data, so keep it in a
+    // zeroizing wrapper for the remainder of this operation.
+    let pin_field = Zeroizing::new(encode_pin_field_iso_4(pin, rnd_seed)?);
 
     let pan_field = encode_pan_field_iso_4(pan)?;
 
     // Step 2: Encrypt the PIN field to produce intermediate block A.
     let intermediate_block_a = provider
-        .encrypt_block(key, &pin_field)
+        .encrypt_block(key, &*pin_field)
         .map_err(PinBlockCryptoError::Crypto)?;
 
     // Step 3: XOR intermediate block A with the PAN field to produce
     // intermediate block B.
-    //
-    // Both operands are fixed-size 16-byte arrays, so this operation cannot
-    // fail and does not need the generic fallible XOR helper.
     let intermediate_block_b: [u8; ISO4_PIN_BLOCK_LENGTH] =
         std::array::from_fn(|i| intermediate_block_a[i] ^ pan_field[i]);
 
@@ -351,7 +422,6 @@ where
         .encrypt_block(key, &intermediate_block_b)
         .map_err(PinBlockCryptoError::Crypto)?;
 
-    // Step 5: Return the final encrypted PIN block.
     Ok(encrypted_block.to_vec())
 }
 
@@ -373,21 +443,37 @@ where
 ///
 /// # Returns
 ///
-/// The decoded PIN as a [`String`].
+/// The deciphered plaintext PIN as a [`Pin`].
+///
+/// The returned `Pin` redacts its plaintext digits from debug output and
+/// zeroizes its owned string when dropped. Call [`Pin::expose_secret`] when
+/// explicit access to the PIN digits is required.
 ///
 /// # Errors
 ///
-/// Returns [`PinBlockCryptoError::PinBlock`] if the encrypted PIN block,
-/// PAN field, or recovered PIN field is invalid.
+/// Returns [`PinBlockCryptoError::PinBlock`] if:
+///
+/// - the encrypted PIN block is not exactly 16 bytes long,
+/// - PAN processing fails,
+/// - the recovered plaintext PIN field is malformed.
 ///
 /// Returns [`PinBlockCryptoError::Crypto`] if the cryptographic provider
-/// reports a decryption error.
+/// reports an AES decryption error.
+///
+/// # Security
+///
+/// The recovered plaintext PIN field is zeroized when it leaves scope, and
+/// the decoded PIN is returned in a [`Pin`] wrapper that zeroizes its owned
+/// plaintext representation when dropped.
+///
+/// Provider-managed AES keys retain the security properties of the selected
+/// cryptographic provider.
 pub fn decipher_pinblock_iso_4<P, K: ?Sized>(
     provider: &P,
     key: &K,
     pin_block: &[u8],
     pan: &str,
-) -> Result<String, PinBlockCryptoError<P::Error>>
+) -> Result<Pin, PinBlockCryptoError<P::Error>>
 where
     P: AesBlockCipher<K>,
 {
@@ -412,11 +498,16 @@ where
     let intermediate_block_a: [u8; ISO4_PIN_BLOCK_LENGTH] =
         std::array::from_fn(|i| intermediate_block_b[i] ^ pan_field[i]);
 
-    // Step 4: Decrypt intermediate block A to recover the PIN field.
-    let pin_field = provider
-        .decrypt_block(key, &intermediate_block_a)
-        .map_err(PinBlockCryptoError::Crypto)?;
+    // Step 4: Decrypt intermediate block A to recover the plaintext PIN field.
+    //
+    // The recovered field contains plaintext PIN-derived data, so zeroize it
+    // when it leaves scope.
+    let pin_field = Zeroizing::new(
+        provider
+            .decrypt_block(key, &intermediate_block_a)
+            .map_err(PinBlockCryptoError::Crypto)?,
+    );
 
-    // Step 5: Decode the plaintext PIN field.
-    decode_pin_field_iso_4(&pin_field).map_err(PinBlockCryptoError::PinBlock)
+    // Step 5: Decode the plaintext PIN field into a zeroizing Pin.
+    decode_pin_field_iso_4(&*pin_field).map_err(PinBlockCryptoError::PinBlock)
 }

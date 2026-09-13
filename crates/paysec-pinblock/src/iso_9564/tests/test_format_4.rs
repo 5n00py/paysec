@@ -135,8 +135,10 @@ fn test_decode_pin_field_iso_4_various_pins() {
     for (expected_pin, encoded_hex) in test_cases {
         let encoded_bytes = decode(encoded_hex).unwrap();
 
+        let decoded_pin = decode_pin_field_iso_4(&encoded_bytes).unwrap();
+
         assert_eq!(
-            decode_pin_field_iso_4(&encoded_bytes).unwrap(),
+            decoded_pin.expose_secret(),
             expected_pin,
             "Failed test for encoded PIN field: {encoded_hex}"
         );
@@ -330,7 +332,8 @@ fn test_decipher_pinblock_iso_4_various() {
                     .expect("Failed to decipher PIN block");
 
             assert_eq!(
-                decrypted_pin, expected_pin,
+                decrypted_pin.expose_secret(),
+                expected_pin,
                 "Deciphered PIN does not match expected PIN"
             );
         }
