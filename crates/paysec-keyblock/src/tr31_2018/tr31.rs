@@ -52,6 +52,16 @@
 //! appropriate for their security requirements, such as an HSM-backed provider
 //! where required.
 //!
+//! Plaintext key material returned by unwrapping is held in [`crate::SecretKey`].
+//! The wrapper redacts debug output and zeroizes its owned bytes when dropped.
+//! Temporary plaintext payload buffers created internally during wrapping and
+//! unwrapping are also zeroized when they leave scope.
+//!
+//! These measures provide defense in depth against accidental disclosure and
+//! residual process-memory contents. They do not replace the stronger
+//! protection provided by an HSM or guarantee that callers have not retained
+//! additional copies of plaintext key material.
+//!
 //! # Example
 //!
 //! ```
@@ -112,13 +122,16 @@
 //! )
 //! .unwrap();
 //!
-//! assert_eq!(unwrapped_key, key);
+//! assert_eq!(unwrapped_key.expose_secret(), key.as_slice());
 //! ```
 
 use super::error::{Tr31CryptoError, Tr31Error};
 use super::key_block_header::KeyBlockHeader;
 use super::key_derivations::derive_keys_version_d;
 use super::payload::{construct_payload, extract_key_from_payload};
+
+use crate::SecretKey;
+use zeroize::Zeroizing;
 
 use paysec_crypto::{AesCbc, AesCmac, AesCmacKeyDerivation, AesKeySize};
 
@@ -182,7 +195,12 @@ where
         derive_keys_version_d(provider, kbpk, kbpk_size).map_err(Tr31CryptoError::Crypto)?;
 
     // Construct the confidential payload.
-    let payload = construct_payload(key, masked_key_len, TR31_D_BLOCK_LEN, random_seed)?;
+    let payload = Zeroizing::new(construct_payload(
+        key,
+        masked_key_len,
+        TR31_D_BLOCK_LEN,
+        random_seed,
+    )?);
 
     // The serialized encrypted payload and MAC are represented as hexadecimal,
     // so each binary byte consumes two ASCII characters.
@@ -197,22 +215,18 @@ where
     }
 
     // Update the key block length before authenticating the header.
-    //
-    // The existing implementation converts the calculated length to u16
-    // before passing it to the header. That behavior is deliberately retained
-    // during this error-type migration.
     header.set_kb_length(total_block_length as u16)?;
 
     let header_str = header.export_str()?;
 
     // MAC input is the clear-text header followed by the plaintext payload.
-    let mut mac_input = header_str.as_bytes().to_vec();
+    let mut mac_input = Zeroizing::new(header_str.as_bytes().to_vec());
 
-    mac_input.extend_from_slice(&payload);
+    mac_input.extend_from_slice(payload.as_slice());
 
     // Authenticate with KBAK.
     let mac = provider
-        .calculate_cmac(&kbak, &mac_input)
+        .calculate_cmac(&kbak, mac_input.as_slice())
         .map_err(Tr31CryptoError::Crypto)?;
 
     // For TR-31 version D, the MAC is also used as the CBC IV.
@@ -220,7 +234,7 @@ where
 
     // Encrypt the confidential payload with KBEK.
     let encrypted_payload = provider
-        .encrypt_cbc(&kbek, &iv, &payload)
+        .encrypt_cbc(&kbek, &iv, payload.as_slice())
         .map_err(Tr31CryptoError::Crypto)?;
 
     let encrypted_payload_hex = hex::encode_upper(&encrypted_payload);
@@ -301,7 +315,12 @@ where
 ///
 /// # Returns
 ///
-/// The parsed [`KeyBlockHeader`] and the unwrapped key material.
+/// The parsed [`KeyBlockHeader`] and the unwrapped plaintext key material.
+///
+/// The key is returned as [`SecretKey`], which redacts its contents from
+/// debug output and zeroizes its owned memory when dropped. Call
+/// [`SecretKey::expose_secret`] when explicit access to the raw key bytes is
+/// required.
 ///
 /// # Errors
 ///
@@ -323,7 +342,7 @@ pub fn tr31_unwrap<P, K: ?Sized>(
     kbpk: &K,
     kbpk_size: AesKeySize,
     key_block: &str,
-) -> Result<(KeyBlockHeader, Vec<u8>), Tr31CryptoError<P::Error>>
+) -> Result<(KeyBlockHeader, SecretKey), Tr31CryptoError<P::Error>>
 where
     P: AesCmacKeyDerivation<K>
         + AesCbc<<P as AesCmacKeyDerivation<K>>::DerivedKey>
@@ -381,25 +400,27 @@ where
     })?;
 
     // Decrypt with KBEK.
-    let decrypted_payload = provider
-        .decrypt_cbc(&kbek, &iv, &encrypted_payload)
-        .map_err(Tr31CryptoError::Crypto)?;
+    let decrypted_payload = Zeroizing::new(
+        provider
+            .decrypt_cbc(&kbek, &iv, &encrypted_payload)
+            .map_err(Tr31CryptoError::Crypto)?,
+    );
 
     // MAC input is the clear-text header followed by the plaintext payload.
-    let mut mac_input = key_block[..header_len].as_bytes().to_vec();
+    let mut mac_input = Zeroizing::new(key_block[..header_len].as_bytes().to_vec());
 
-    mac_input.extend_from_slice(&decrypted_payload);
+    mac_input.extend_from_slice(decrypted_payload.as_slice());
 
     // Authenticate with KBAK.
     let calculated_mac = provider
-        .calculate_cmac(&kbak, &mac_input)
+        .calculate_cmac(&kbak, mac_input.as_slice())
         .map_err(Tr31CryptoError::Crypto)?;
 
     if mac.as_slice() != calculated_mac.as_slice() {
         return Err(Tr31Error::MacVerificationFailed.into());
     }
 
-    let key = extract_key_from_payload(&decrypted_payload)?;
+    let key = extract_key_from_payload(decrypted_payload.as_slice())?;
 
-    Ok((header, key))
+    Ok((header, SecretKey::new(key)))
 }

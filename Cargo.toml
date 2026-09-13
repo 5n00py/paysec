@@ -25,6 +25,8 @@ aes = "0.9.3"
 cbc = { version = "0.2.1", features = ["alloc"] }
 cmac = "0.8.0"
 
+zeroize = "1.9.0"
+
 paysec-crypto = {
 version = "0.2.0",
 path = "crates/paysec-crypto",

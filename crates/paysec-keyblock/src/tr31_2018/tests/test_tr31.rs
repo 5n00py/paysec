@@ -430,7 +430,11 @@ fn test_tr31_unwrap_example_a_7_4() {
 
         let (header, extracted_key) = unwrap_result.unwrap();
 
-        assert_eq!(extracted_key, expected_key, "Extracted key mismatch");
+        assert_eq!(
+            extracted_key.expose_secret(),
+            expected_key.as_slice(),
+            "Extracted key mismatch"
+        );
 
         assert_eq!(header.version_id(), "D", "Header version ID mismatch");
 
@@ -463,7 +467,11 @@ fn test_tr31_unwrap_example_aes_128() {
 
         let (header, extracted_key) = unwrap_result.unwrap();
 
-        assert_eq!(extracted_key, expected_key, "Extracted key mismatch");
+        assert_eq!(
+            extracted_key.expose_secret(),
+            expected_key.as_slice(),
+            "Extracted key mismatch"
+        );
 
         assert_eq!(header.version_id(), "D");
         assert_eq!(header.key_usage(), "P0");
@@ -491,7 +499,11 @@ fn test_tr31_unwrap_example_aes_128_masked_length() {
 
         let (header, extracted_key) = unwrap_result.unwrap();
 
-        assert_eq!(extracted_key, expected_key, "Extracted key mismatch");
+        assert_eq!(
+            extracted_key.expose_secret(),
+            expected_key.as_slice(),
+            "Extracted key mismatch"
+        );
 
         assert_eq!(header.version_id(), "D");
         assert_eq!(header.key_usage(), "P0");
@@ -519,7 +531,11 @@ fn test_tr31_unwrap_example_aes_128_two_optional_blocks() {
 
         let (header, extracted_key) = unwrap_result.unwrap();
 
-        assert_eq!(extracted_key, expected_key, "Extracted key mismatch");
+        assert_eq!(
+            extracted_key.expose_secret(),
+            expected_key.as_slice(),
+            "Extracted key mismatch"
+        );
 
         assert_eq!(header.version_id(), "D");
         assert_eq!(header.key_usage(), "P0");
@@ -559,7 +575,11 @@ fn test_tr31_unwrap_example_aes_192_no_optional_blocks_masked_length() {
 
         let (header, extracted_key) = unwrap_result.unwrap();
 
-        assert_eq!(extracted_key, expected_key, "Extracted key mismatch");
+        assert_eq!(
+            extracted_key.expose_secret(),
+            expected_key.as_slice(),
+            "Extracted key mismatch"
+        );
 
         assert_eq!(header.version_id(), "D");
         assert_eq!(header.key_usage(), "B1");
@@ -586,7 +606,11 @@ fn test_tr31_unwrap_example_aes_192_two_optional_blocks() {
 
         let (header, extracted_key) = unwrap_result.unwrap();
 
-        assert_eq!(extracted_key, expected_key, "Extracted key mismatch");
+        assert_eq!(
+            extracted_key.expose_secret(),
+            expected_key.as_slice(),
+            "Extracted key mismatch"
+        );
 
         assert_eq!(header.version_id(), "D");
         assert_eq!(header.key_usage(), "P0");
@@ -627,7 +651,11 @@ fn test_tr31_unwrap_example_aes_256_no_optional_blocks_no_masked_length() {
 
         let (header, extracted_key) = unwrap_result.unwrap();
 
-        assert_eq!(extracted_key, expected_key, "Extracted key mismatch");
+        assert_eq!(
+            extracted_key.expose_secret(),
+            expected_key.as_slice(),
+            "Extracted key mismatch"
+        );
 
         assert_eq!(header.version_id(), "D");
         assert_eq!(header.key_usage(), "P0");
@@ -657,7 +685,11 @@ fn test_tr31_unwrap_example_aes_256_no_optional_blocks_masked_length() {
 
         let (header, extracted_key) = unwrap_result.unwrap();
 
-        assert_eq!(extracted_key, expected_key, "Extracted key mismatch");
+        assert_eq!(
+            extracted_key.expose_secret(),
+            expected_key.as_slice(),
+            "Extracted key mismatch"
+        );
 
         assert_eq!(header.version_id(), "D");
         assert_eq!(header.key_usage(), "B1");
@@ -685,7 +717,11 @@ fn test_tr31_unwrap_example_aes_256_two_optional_blocks() {
 
         let (header, extracted_key) = unwrap_result.unwrap();
 
-        assert_eq!(extracted_key, expected_key, "Extracted key mismatch");
+        assert_eq!(
+            extracted_key.expose_secret(),
+            expected_key.as_slice(),
+            "Extracted key mismatch"
+        );
 
         assert_eq!(header.version_id(), "D");
         assert_eq!(header.key_usage(), "P0");

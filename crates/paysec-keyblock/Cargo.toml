@@ -11,6 +11,7 @@ description = "Key block functionality for payment security standards."
 [dependencies]
 hex.workspace = true
 paysec-crypto.workspace = true
+zeroize.workspace = true
 
 [dev-dependencies]
 paysec-crypto-rustcrypto.workspace = true
