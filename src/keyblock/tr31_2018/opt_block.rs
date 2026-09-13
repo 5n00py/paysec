@@ -353,7 +353,7 @@ impl OptBlock {
     /// * `opt_block_to_append` - The `OptBlock` to be appended to the end of the current chain.
     pub fn append(&mut self, opt_block_to_append: OptBlock) {
         match &mut self.next {
-            Some(ref mut next_block) => next_block.append(opt_block_to_append),
+            Some(next_block) => next_block.append(opt_block_to_append),
             None => self.set_next(Some(opt_block_to_append)),
         }
     }

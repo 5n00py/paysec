@@ -1,7 +1,8 @@
 [package]
 name = "paysec"
-version = "0.1.1"
-edition = "2021"
+version = "0.2.0"
+edition = "2024"
+rust-version = "1.89"
 authors = ["David Schmid <david.schmid@mailbox.org>"]
 description = "Rust library related to payment security standards."
 license = "GPL-3.0"
