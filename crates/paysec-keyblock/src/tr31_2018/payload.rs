@@ -1,124 +1,223 @@
-use std::error::Error;
+use super::error::PayloadError;
 
-/// Constructs the payload for a TR-31 key block.
+/// Maximum key length that can be represented by the TR-31 two-byte
+/// key-length-in-bits field.
+const MAX_KEY_LENGTH_BYTES: usize = u16::MAX as usize / 8;
+
+/// Construct the payload for a TR-31 key block.
 ///
-/// This function creates the payload to be encrypted in a TR-31 key block.
-/// It includes the key length (in bits), the key itself, and the necessary padding.
-/// The padding length is calculated to ensure the total payload length is a multiple
-/// of the cipher block size. A random seed is used for padding to enhance security.
+/// The payload consists of:
 ///
-/// # Arguments
+/// 1. A two-byte big-endian key length expressed in bits.
+/// 2. The key or sensitive data.
+/// 3. Random padding sufficient to align the payload to the cipher block
+///    length and, if requested, mask the actual key length.
 ///
-/// * `key`: The key or sensitive data being protected.
-/// * `masked_key_length`: The minimum length for the key data, used to mask the true length of shorter keys.
-/// * `cipher_block_length`: The block length of the encryption cipher (e.g., 16 for AES).
-/// * `random_seed`: Random data used for padding. Must be at least as long as the calculated padding length.
+/// # Parameters
+///
+/// * `key` - The key or sensitive data being protected.
+/// * `masked_key_length` - Minimum key-data length to expose through the
+///   resulting payload size. A value shorter than the actual key length has
+///   no effect.
+/// * `cipher_block_length` - Block length of the encryption cipher.
+/// * `random_seed` - Random bytes used as payload padding.
 ///
 /// # Returns
 ///
-/// A `Result` containing the constructed payload as a `Vec<u8>` if successful, or an error if any conditions are not met.
+/// The constructed plaintext TR-31 payload.
 ///
 /// # Errors
 ///
-/// This function returns an error if the key length exceeds the TR-31 maximum length or if the
-/// provided random seed is too short for the required padding.
+/// Returns [`PayloadError::KeyTooLong`] if the key length cannot be represented
+/// in the TR-31 two-byte key-length field.
+///
+/// Returns [`PayloadError::InvalidCipherBlockLength`] if
+/// `cipher_block_length` is zero.
+///
+/// Returns [`PayloadError::RandomSeedTooShort`] if the supplied random seed
+/// does not contain enough bytes for the required padding.
+///
+/// Returns [`PayloadError::InvalidTotalPayloadLength`] if calculating the
+/// payload size overflows or otherwise produces an invalid result.
 pub fn construct_payload(
     key: &[u8],
     masked_key_length: usize,
     cipher_block_length: usize,
     random_seed: &[u8],
-) -> Result<Vec<u8>, Box<dyn Error>> {
+) -> Result<Vec<u8>, PayloadError> {
     let key_len = key.len();
 
-    // Calculate the padding length
+    let key_length_bits = key_len
+        .checked_mul(8)
+        .and_then(|value| u16::try_from(value).ok())
+        .ok_or(PayloadError::KeyTooLong {
+            max: MAX_KEY_LENGTH_BYTES,
+            actual: key_len,
+        })?;
+
     let padding_length = calculate_padding_length(key_len, masked_key_length, cipher_block_length)?;
 
-    let mut payload = Vec::with_capacity(key_len + 2 + padding_length);
+    let payload_capacity = key_len
+        .checked_add(2)
+        .and_then(|value| value.checked_add(padding_length))
+        .ok_or(PayloadError::InvalidTotalPayloadLength)?;
 
-    // Write the key length in bits (16-bit big endian)
-    payload.extend_from_slice(&(8 * key_len as u16).to_be_bytes());
+    let mut payload = Vec::with_capacity(payload_capacity);
 
-    // Append the actual key
+    // Key length is stored in bits as a 16-bit big-endian integer.
+    payload.extend_from_slice(&key_length_bits.to_be_bytes());
+
+    // Append the actual protected key or sensitive data.
     payload.extend_from_slice(key);
 
-    // Use the provided random seed for the padding
     if random_seed.len() < padding_length {
-        return Err(
-            "ERROR TR-31 PAYLOAD: The provided random seed is too short for the padding requirement"
-                .into(),
-        );
+        return Err(PayloadError::RandomSeedTooShort {
+            required: padding_length,
+            actual: random_seed.len(),
+        });
     }
 
-    // Truncate random_seed to padding_length and add it as padding to payload
+    // Only the amount of random data required for padding is consumed.
     payload.extend_from_slice(&random_seed[..padding_length]);
 
     Ok(payload)
 }
 
-/// Extract the secret key from a TR-31 payload.
+/// Extract the protected key from a TR-31 plaintext payload.
 ///
-/// This function reads the key length (in bits) from the first 2 bytes of the payload,
-/// then extracts the key based on this length. The function assumes that the payload is
-/// correctly formatted according to TR-31 specifications.
+/// The first two bytes of the payload contain the key length in bits. The
+/// corresponding number of key bytes immediately follows.
 ///
-/// # Arguments
+/// Any remaining data is payload padding and is ignored by this function.
 ///
-/// * `payload`: The TR-31 payload containing the key length, key, and padding.
+/// # Parameters
+///
+/// * `payload` - Plaintext TR-31 payload.
 ///
 /// # Returns
 ///
-/// A `Result` containing the extracted key as a `Vec<u8>` if successful, or an error if the payload is incorrectly formatted.
+/// The extracted key or sensitive data.
 ///
 /// # Errors
 ///
-/// This function returns an error if the payload length is too short to contain a valid key length and key.
-pub fn extract_key_from_payload(payload: &[u8]) -> Result<Vec<u8>, Box<dyn Error>> {
-    if payload.len() < 2 {
-        return Err("ERROR TR-31 PAYLOAD: Payload too short to contain valid key length".into());
+/// Returns [`PayloadError::PayloadTooShort`] if the payload does not contain
+/// the two-byte key-length field.
+///
+/// Returns [`PayloadError::PayloadTooShortForKey`] if the payload does not
+/// contain enough bytes for the declared key length.
+pub fn extract_key_from_payload(payload: &[u8]) -> Result<Vec<u8>, PayloadError> {
+    const KEY_LENGTH_FIELD_SIZE: usize = 2;
+
+    if payload.len() < KEY_LENGTH_FIELD_SIZE {
+        return Err(PayloadError::PayloadTooShort {
+            minimum: KEY_LENGTH_FIELD_SIZE,
+            actual: payload.len(),
+        });
     }
 
-    // Read the key length in bits from the first 2 bytes and convert to bytes
     let key_length_bits = u16::from_be_bytes([payload[0], payload[1]]);
+
     let key_length_bytes = (key_length_bits / 8) as usize;
 
-    // Check if the payload has enough data for the key
-    if payload.len() < 2 + key_length_bytes {
-        return Err("ERROR TR-31 PAYLOAD: Payload too short for the specified key length".into());
+    let required_length = KEY_LENGTH_FIELD_SIZE
+        .checked_add(key_length_bytes)
+        .ok_or(PayloadError::InvalidTotalPayloadLength)?;
+
+    if payload.len() < required_length {
+        return Err(PayloadError::PayloadTooShortForKey {
+            required: required_length,
+            actual: payload.len(),
+        });
     }
 
-    // Extract the key based on the calculated length
-    let key = payload[2..2 + key_length_bytes].to_vec();
-
-    Ok(key)
+    Ok(payload[KEY_LENGTH_FIELD_SIZE..required_length].to_vec())
 }
 
-/// Calculate the padding length for a TR-31 key block payload.
+/// Calculate the padding length required for a TR-31 payload.
 ///
-/// # Arguments
-/// * `key_len`: The length of the key in bytes.
-/// * `masked_key_length`: The minimum length for the key data, used to mask the true length of shorter keys.
-/// * `cipher_block_length`: The block length of the encryption cipher (e.g., 16 for AES).
+/// The plaintext payload consists of a two-byte key-length field, the key, and
+/// padding. Its final size is rounded up to a multiple of
+/// `cipher_block_length`.
+///
+/// `masked_key_length` can be used to make a shorter key occupy the same
+/// payload size as a longer key.
+///
+/// # Parameters
+///
+/// * `key_len` - Actual key length in bytes.
+/// * `masked_key_length` - Minimum key-data length represented by the payload.
+/// * `cipher_block_length` - Cipher block length in bytes.
 ///
 /// # Returns
-/// The padding length required for the payload.
+///
+/// Number of padding bytes required.
 ///
 /// # Errors
-/// Returns an error if the calculated total payload length or padding length is invalid.
+///
+/// Returns [`PayloadError::InvalidCipherBlockLength`] if the cipher block
+/// length is zero.
+///
+/// Returns [`PayloadError::InvalidTotalPayloadLength`] if calculating the
+/// required payload size overflows or produces an invalid length.
 pub fn calculate_padding_length(
     key_len: usize,
     masked_key_length: usize,
     cipher_block_length: usize,
-) -> Result<usize, Box<dyn Error>> {
-    let raw_key_section_length = 2 + key_len;
-    let effective_key_length = std::cmp::max(key_len, masked_key_length);
-    let total_payload_length = ((2 + effective_key_length + (cipher_block_length - 1))
-        / cipher_block_length)
-        * cipher_block_length;
-
-    if total_payload_length < raw_key_section_length {
-        return Err("ERROR TR-31 PAYLOAD: Invalid total payload length".into());
+) -> Result<usize, PayloadError> {
+    if cipher_block_length == 0 {
+        return Err(PayloadError::InvalidCipherBlockLength);
     }
 
-    let padding_length = total_payload_length - raw_key_section_length;
-    Ok(padding_length)
+    let raw_key_section_length = 2usize
+        .checked_add(key_len)
+        .ok_or(PayloadError::InvalidTotalPayloadLength)?;
+
+    let effective_key_length = std::cmp::max(key_len, masked_key_length);
+
+    // Round 2 + effective_key_length up to the next cipher-block boundary.
+    //
+    // Equivalent to:
+    //
+    // ((length + block_size - 1) / block_size) * block_size
+    //
+    // but using checked arithmetic so malformed/extreme input cannot cause
+    // an integer-overflow panic.
+    let length_to_round = 2usize
+        .checked_add(effective_key_length)
+        .and_then(|value| value.checked_add(cipher_block_length - 1))
+        .ok_or(PayloadError::InvalidTotalPayloadLength)?;
+
+    let block_count = length_to_round / cipher_block_length;
+
+    let total_payload_length = block_count
+        .checked_mul(cipher_block_length)
+        .ok_or(PayloadError::InvalidTotalPayloadLength)?;
+
+    if total_payload_length < raw_key_section_length {
+        return Err(PayloadError::InvalidTotalPayloadLength);
+    }
+
+    Ok(total_payload_length - raw_key_section_length)
+}
+
+#[test]
+fn test_calculate_padding_length_zero_block_length() {
+    let result = calculate_padding_length(16, 0, 0);
+
+    assert_eq!(result, Err(PayloadError::InvalidCipherBlockLength));
+}
+
+#[test]
+fn test_construct_payload_random_seed_too_short() {
+    let key = [0u8; 16];
+
+    let result = construct_payload(&key, 0, 16, &[]);
+
+    assert!(matches!(
+        result,
+        Err(PayloadError::RandomSeedTooShort {
+            required,
+            actual: 0,
+        }) if required > 0
+    ));
 }

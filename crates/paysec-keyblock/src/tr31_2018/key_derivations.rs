@@ -1,7 +1,5 @@
 use paysec_crypto::{AesCmacKeyDerivation, AesKeySize};
 
-use std::error::Error;
-
 // Input Data for Key Derivation Binding Method - AES
 
 // AES-128
@@ -63,7 +61,7 @@ pub fn derive_keys_version_d<P, K: ?Sized>(
     provider: &P,
     kbpk: &K,
     key_size: AesKeySize,
-) -> Result<(P::DerivedKey, P::DerivedKey), Box<dyn Error>>
+) -> Result<(P::DerivedKey, P::DerivedKey), P::Error>
 where
     P: AesCmacKeyDerivation<K>,
 {

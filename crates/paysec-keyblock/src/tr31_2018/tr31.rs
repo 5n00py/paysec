@@ -31,6 +31,15 @@
 //!
 //! Only TR-31 version `D` is currently supported.
 //!
+//! # Error Handling
+//!
+//! TR-31 formatting, parsing, validation, and authentication failures are
+//! reported through [`crate::Tr31Error`].
+//!
+//! Errors returned by the selected cryptographic provider, including key
+//! derivation, AES-CMAC, and AES-CBC failures, are preserved through
+//! [`crate::Tr31CryptoError::Crypto`].
+//!
 //! # Random Padding
 //!
 //! Random data used for payload padding must be supplied by the caller. This
@@ -106,13 +115,12 @@
 //! assert_eq!(unwrapped_key, key);
 //! ```
 
+use super::error::{Tr31CryptoError, Tr31Error};
 use super::key_block_header::KeyBlockHeader;
 use super::key_derivations::derive_keys_version_d;
 use super::payload::{construct_payload, extract_key_from_payload};
 
 use paysec_crypto::{AesCbc, AesCmac, AesCmacKeyDerivation, AesKeySize};
-
-use std::error::Error;
 
 const TR31_D_MAC_LEN: usize = 16;
 const TR31_D_BLOCK_LEN: usize = 16;
@@ -142,14 +150,15 @@ const TR31_D_BLOCK_LEN: usize = 16;
 ///
 /// # Errors
 ///
-/// Returns an error if:
+/// Returns [`Tr31CryptoError::Tr31`] if:
 ///
 /// - the header does not specify version `D`,
 /// - payload construction fails,
 /// - the resulting key block length is invalid,
-/// - KBEK or KBAK derivation fails,
-/// - AES-CMAC calculation fails,
-/// - AES-CBC encryption fails.
+/// - header processing fails.
+///
+/// Returns [`Tr31CryptoError::Crypto`] if the cryptographic provider reports
+/// a key-derivation, AES-CMAC, or AES-CBC encryption error.
 pub fn tr31_wrap<P, K: ?Sized>(
     provider: &P,
     kbpk: &K,
@@ -158,22 +167,19 @@ pub fn tr31_wrap<P, K: ?Sized>(
     key: &[u8],
     masked_key_len: usize,
     random_seed: &[u8],
-) -> Result<String, Box<dyn Error>>
+) -> Result<String, Tr31CryptoError<P::Error>>
 where
     P: AesCmacKeyDerivation<K>
         + AesCbc<<P as AesCmacKeyDerivation<K>>::DerivedKey>
         + AesCmac<<P as AesCmacKeyDerivation<K>>::DerivedKey>,
 {
     if header.version_id() != "D" {
-        return Err(format!(
-            "ERROR TR-31: Key block version not supported by implementation: {}",
-            header.version_id()
-        )
-        .into());
+        return Err(Tr31Error::UnsupportedVersion(header.version_id().to_string()).into());
     }
 
     // Derive KBEK and KBAK from the KBPK.
-    let (kbek, kbak) = derive_keys_version_d(provider, kbpk, kbpk_size)?;
+    let (kbek, kbak) =
+        derive_keys_version_d(provider, kbpk, kbpk_size).map_err(Tr31CryptoError::Crypto)?;
 
     // Construct the confidential payload.
     let payload = construct_payload(key, masked_key_len, TR31_D_BLOCK_LEN, random_seed)?;
@@ -183,30 +189,39 @@ where
     let total_block_length = header.len() + (payload.len() * 2) + (TR31_D_MAC_LEN * 2);
 
     if total_block_length % TR31_D_BLOCK_LEN != 0 {
-        return Err(format!(
-            "ERROR TR-31: Total block length is not a multiple of block length: {}",
-            TR31_D_BLOCK_LEN
-        )
+        return Err(Tr31Error::TotalBlockLengthNotMultiple {
+            block_length: TR31_D_BLOCK_LEN,
+            actual: total_block_length,
+        }
         .into());
     }
 
     // Update the key block length before authenticating the header.
+    //
+    // The existing implementation converts the calculated length to u16
+    // before passing it to the header. That behavior is deliberately retained
+    // during this error-type migration.
     header.set_kb_length(total_block_length as u16)?;
 
     let header_str = header.export_str()?;
 
     // MAC input is the clear-text header followed by the plaintext payload.
     let mut mac_input = header_str.as_bytes().to_vec();
+
     mac_input.extend_from_slice(&payload);
 
     // Authenticate with KBAK.
-    let mac = provider.calculate_cmac(&kbak, &mac_input)?;
+    let mac = provider
+        .calculate_cmac(&kbak, &mac_input)
+        .map_err(Tr31CryptoError::Crypto)?;
 
     // For TR-31 version D, the MAC is also used as the CBC IV.
     let iv = mac;
 
     // Encrypt the confidential payload with KBEK.
-    let encrypted_payload = provider.encrypt_cbc(&kbek, &iv, &payload)?;
+    let encrypted_payload = provider
+        .encrypt_cbc(&kbek, &iv, &payload)
+        .map_err(Tr31CryptoError::Crypto)?;
 
     let encrypted_payload_hex = hex::encode_upper(&encrypted_payload);
 
@@ -218,7 +233,9 @@ where
 /// Wrap a cryptographic key according to TR-31 version `D` using a header
 /// supplied as a string.
 ///
-/// This is a convenience wrapper around [`tr31_wrap`].
+/// This is a convenience wrapper around [`tr31_wrap`]. The supplied header is
+/// first parsed into a [`KeyBlockHeader`] and then passed to the normal
+/// wrapping operation.
 ///
 /// # Parameters
 ///
@@ -230,9 +247,17 @@ where
 /// * `masked_key_len` - Optional masked key length.
 /// * `random_seed` - Random data used for payload padding.
 ///
+/// # Returns
+///
+/// The complete ASCII-encoded TR-31 key block.
+///
 /// # Errors
 ///
-/// Returns an error if the header cannot be parsed or if wrapping fails.
+/// Returns [`Tr31CryptoError::Tr31`] if the header cannot be parsed or if any
+/// TR-31 wrapping, payload, or header operation fails.
+///
+/// Returns [`Tr31CryptoError::Crypto`] if the cryptographic provider reports
+/// a key-derivation, AES-CMAC, or AES-CBC encryption error.
 pub fn tr31_wrap_with_header_string<P, K: ?Sized>(
     provider: &P,
     kbpk: &K,
@@ -241,7 +266,7 @@ pub fn tr31_wrap_with_header_string<P, K: ?Sized>(
     key: &[u8],
     masked_key_len: usize,
     random_seed: &[u8],
-) -> Result<String, Box<dyn Error>>
+) -> Result<String, Tr31CryptoError<P::Error>>
 where
     P: AesCmacKeyDerivation<K>
         + AesCbc<<P as AesCmacKeyDerivation<K>>::DerivedKey>
@@ -280,22 +305,25 @@ where
 ///
 /// # Errors
 ///
-/// Returns an error if:
+/// Returns [`Tr31CryptoError::Tr31`] if:
 ///
 /// - the key block header cannot be parsed,
-/// - the encoded key block length is inconsistent,
+/// - the encoded key block length does not match the actual length,
 /// - the key block is shorter than the required minimum,
 /// - the key block version is unsupported,
-/// - encrypted payload or MAC decoding fails,
-/// - key derivation or AES-CBC decryption fails,
+/// - the encrypted payload or MAC is not valid hexadecimal,
+/// - the decoded MAC does not have the required length,
 /// - MAC verification fails,
-/// - the plaintext payload is invalid.
+/// - the decrypted payload is invalid.
+///
+/// Returns [`Tr31CryptoError::Crypto`] if the cryptographic provider reports
+/// a key-derivation, AES-CBC decryption, or AES-CMAC calculation error.
 pub fn tr31_unwrap<P, K: ?Sized>(
     provider: &P,
     kbpk: &K,
     kbpk_size: AesKeySize,
     key_block: &str,
-) -> Result<(KeyBlockHeader, Vec<u8>), Box<dyn Error>>
+) -> Result<(KeyBlockHeader, Vec<u8>), Tr31CryptoError<P::Error>>
 where
     P: AesCmacKeyDerivation<K>
         + AesCbc<<P as AesCmacKeyDerivation<K>>::DerivedKey>
@@ -307,42 +335,55 @@ where
 
     let key_block_len = key_block.len();
 
-    if key_block_len != header.kb_length() as usize {
-        return Err("ERROR TR-31: Key block length does not match its length in the header".into());
+    let encoded_key_block_len = header.kb_length() as usize;
+
+    if key_block_len != encoded_key_block_len {
+        return Err(Tr31Error::KeyBlockLengthMismatch {
+            expected: encoded_key_block_len,
+            actual: key_block_len,
+        }
+        .into());
     }
 
     let min_key_block_len = 16 + (2 * TR31_D_BLOCK_LEN) + (2 * TR31_D_MAC_LEN);
 
     if key_block_len < min_key_block_len {
-        return Err("ERROR TR-31: Key block length is below minimum required length".into());
-    }
-
-    if header.version_id() != "D" {
-        return Err(format!(
-            "ERROR TR-31: Key block version not supported by implementation: {}",
-            header.version_id()
-        )
+        return Err(Tr31Error::KeyBlockBelowMinimum {
+            minimum: min_key_block_len,
+            actual: key_block_len,
+        }
         .into());
     }
 
-    let encrypted_payload_hex = &key_block[header_len..(key_block_len - TR31_D_MAC_LEN * 2)];
+    if header.version_id() != "D" {
+        return Err(Tr31Error::UnsupportedVersion(header.version_id().to_string()).into());
+    }
 
-    let mac_hex = &key_block[(key_block_len - TR31_D_MAC_LEN * 2)..];
+    let mac_hex_len = TR31_D_MAC_LEN * 2;
+
+    let encrypted_payload_hex = &key_block[header_len..key_block_len - mac_hex_len];
+
+    let mac_hex = &key_block[key_block_len - mac_hex_len..];
 
     // Derive KBEK and KBAK from the KBPK.
-    let (kbek, kbak) = derive_keys_version_d(provider, kbpk, kbpk_size)?;
+    let (kbek, kbak) =
+        derive_keys_version_d(provider, kbpk, kbpk_size).map_err(Tr31CryptoError::Crypto)?;
 
     let encrypted_payload = hex::decode(encrypted_payload_hex)?;
 
     let mac = hex::decode(mac_hex)?;
 
-    let iv: [u8; TR31_D_MAC_LEN] = mac
-        .as_slice()
-        .try_into()
-        .map_err(|_| "ERROR TR-31: MAC must be exactly 16 bytes long")?;
+    let iv: [u8; TR31_D_MAC_LEN] = mac.as_slice().try_into().map_err(|_| {
+        Tr31CryptoError::Tr31(Tr31Error::InvalidMacLength {
+            expected: TR31_D_MAC_LEN,
+            actual: mac.len(),
+        })
+    })?;
 
     // Decrypt with KBEK.
-    let decrypted_payload = provider.decrypt_cbc(&kbek, &iv, &encrypted_payload)?;
+    let decrypted_payload = provider
+        .decrypt_cbc(&kbek, &iv, &encrypted_payload)
+        .map_err(Tr31CryptoError::Crypto)?;
 
     // MAC input is the clear-text header followed by the plaintext payload.
     let mut mac_input = key_block[..header_len].as_bytes().to_vec();
@@ -350,10 +391,12 @@ where
     mac_input.extend_from_slice(&decrypted_payload);
 
     // Authenticate with KBAK.
-    let calculated_mac = provider.calculate_cmac(&kbak, &mac_input)?;
+    let calculated_mac = provider
+        .calculate_cmac(&kbak, &mac_input)
+        .map_err(Tr31CryptoError::Crypto)?;
 
     if mac.as_slice() != calculated_mac.as_slice() {
-        return Err("ERROR TR-31: MAC check failed".into());
+        return Err(Tr31Error::MacVerificationFailed.into());
     }
 
     let key = extract_key_from_payload(&decrypted_payload)?;

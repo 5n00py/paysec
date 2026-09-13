@@ -60,7 +60,7 @@
 //! .expect("Failed to encipher PIN block");
 //!
 //! let encrypted_pin_block_hex =
-//!     hex::encode(&encrypted_pin_block).to_uppercase();
+//!     hex::encode_upper(&encrypted_pin_block);
 //!
 //! assert_eq!(
 //!     encrypted_pin_block_hex,
@@ -94,10 +94,10 @@
 //! and test-data generation. Production use should employ an appropriately
 //! secured cryptographic implementation, such as an HSM where required.
 
-use crate::utils::{left_pad_str, right_pad_str, xor_byte_arrays};
+use crate::utils::{left_pad_str, right_pad_str};
+use crate::{PinBlockCryptoError, PinBlockError};
 
 use paysec_crypto::AesBlockCipher;
-use std::error::Error;
 
 const ISO4_PIN_BLOCK_LENGTH: usize = 16;
 const ISO4_RANDOM_SEED_LENGTH: usize = 8;
@@ -127,22 +127,24 @@ const ISO4_RANDOM_SEED_LENGTH: usize = 8;
 ///
 /// # Errors
 ///
-/// Returns an error if:
+/// Returns [`PinBlockError::InvalidPin`] if the PIN is not between 4 and 12
+/// ASCII digits.
 ///
-/// - the PIN is shorter than 4 digits,
-/// - the PIN is longer than 12 digits,
-/// - the PIN contains non-numeric characters,
-/// - fewer than 8 random bytes are supplied.
+/// Returns [`PinBlockError::RandomSeedTooShort`] if fewer than eight random
+/// bytes are supplied.
 pub fn encode_pin_field_iso_4(
     pin: &str,
     rnd_seed: Vec<u8>,
-) -> Result<[u8; ISO4_PIN_BLOCK_LENGTH], Box<dyn Error>> {
-    if pin.len() < 4 || pin.len() > 12 || !pin.chars().all(char::is_numeric) {
-        return Err("PIN BLOCK ISO 4 ERROR: PIN must be between 4 and 12 digits long".into());
+) -> Result<[u8; ISO4_PIN_BLOCK_LENGTH], PinBlockError> {
+    if !(4..=12).contains(&pin.len()) || !pin.chars().all(|c| c.is_ascii_digit()) {
+        return Err(PinBlockError::InvalidPin);
     }
 
     if rnd_seed.len() < ISO4_RANDOM_SEED_LENGTH {
-        return Err("PIN BLOCK ISO 4 ERROR: Random seed must be at least 8 bytes long".into());
+        return Err(PinBlockError::RandomSeedTooShort {
+            minimum: ISO4_RANDOM_SEED_LENGTH,
+            actual: rnd_seed.len(),
+        });
     }
 
     let mut pin_field = [0u8; ISO4_PIN_BLOCK_LENGTH];
@@ -184,36 +186,30 @@ pub fn encode_pin_field_iso_4(
 ///
 /// # Errors
 ///
-/// Returns an error if:
-///
-/// - the PIN field is not exactly 16 bytes long,
-/// - the format identifier is not format 4,
-/// - the encoded PIN length is outside the range 4 to 12,
-/// - a PIN digit contains an invalid BCD value,
-/// - a filler nibble is not `0xA`.
-pub fn decode_pin_field_iso_4(pin_field: &[u8]) -> Result<String, Box<dyn Error>> {
+/// Returns a [`PinBlockError`] if the PIN field has an invalid length,
+/// control field, encoded PIN length, PIN digit, or filler nibble.
+pub fn decode_pin_field_iso_4(pin_field: &[u8]) -> Result<String, PinBlockError> {
     if pin_field.len() != ISO4_PIN_BLOCK_LENGTH {
-        return Err("PIN BLOCK ISO 4 ERROR: PIN field must be 16 bytes long".into());
+        return Err(PinBlockError::InvalidPinFieldLength {
+            expected: ISO4_PIN_BLOCK_LENGTH,
+            actual: pin_field.len(),
+        });
     }
 
     // The high nibble identifies ISO format 4.
-    if pin_field[0] >> 4 != 0x4 {
-        return Err(format!(
-            "PIN BLOCK ISO 4 ERROR: PIN block is not ISO format 4: control field `{}`",
-            pin_field[0] >> 4
-        )
-        .into());
+    let control_field = pin_field[0] >> 4;
+
+    if control_field != 0x4 {
+        return Err(PinBlockError::InvalidControlField {
+            actual: control_field,
+        });
     }
 
     // The low nibble contains the PIN length.
     let pin_len = (pin_field[0] & 0x0F) as usize;
 
     if !(4..=12).contains(&pin_len) {
-        return Err(format!(
-            "PIN BLOCK ISO 4 ERROR: PIN length must be between 4 and 12: `{}`",
-            pin_len
-        )
-        .into());
+        return Err(PinBlockError::InvalidDecodedPinLength { actual: pin_len });
     }
 
     let mut pin = String::with_capacity(pin_len);
@@ -226,7 +222,7 @@ pub fn decode_pin_field_iso_4(pin_field: &[u8]) -> Result<String, Box<dyn Error>
         };
 
         if digit > 9 {
-            return Err("PIN BLOCK ISO 4 ERROR: PIN contains invalid digit".into());
+            return Err(PinBlockError::InvalidPinDigit);
         }
 
         pin.push(char::from(b'0' + digit));
@@ -241,7 +237,7 @@ pub fn decode_pin_field_iso_4(pin_field: &[u8]) -> Result<String, Box<dyn Error>
         };
 
         if filler != 0xA {
-            return Err("PIN BLOCK ISO 4 ERROR: PIN block filler is incorrect".into());
+            return Err(PinBlockError::InvalidFiller);
         }
     }
 
@@ -263,15 +259,14 @@ pub fn decode_pin_field_iso_4(pin_field: &[u8]) -> Result<String, Box<dyn Error>
 ///
 /// # Errors
 ///
-/// Returns an error if:
+/// Returns [`PinBlockError::InvalidPan`] if the PAN is empty, longer than
+/// 19 digits, or contains a non-ASCII digit.
 ///
-/// - the PAN is empty,
-/// - the PAN contains more than 19 digits,
-/// - the PAN contains non-numeric characters,
-/// - hexadecimal decoding of the constructed PAN field fails.
-pub fn encode_pan_field_iso_4(pan: &str) -> Result<[u8; ISO4_PIN_BLOCK_LENGTH], Box<dyn Error>> {
-    if pan.is_empty() || pan.len() > 19 || !pan.chars().all(|c| c.is_ascii_digit()) {
-        return Err("PIN BLOCK ISO 4 ERROR: PAN must be between 1 and 19 digits long.".into());
+/// Returns [`PinBlockError::Hex`] if hexadecimal decoding of the internally
+/// constructed PAN field fails.
+pub fn encode_pan_field_iso_4(pan: &str) -> Result<[u8; ISO4_PIN_BLOCK_LENGTH], PinBlockError> {
+    if !(1..=19).contains(&pan.len()) || !pan.chars().all(|c| c.is_ascii_digit()) {
+        return Err(PinBlockError::InvalidPan);
     }
 
     let pan_len = if pan.len() > 12 {
@@ -288,10 +283,11 @@ pub fn encode_pan_field_iso_4(pan: &str) -> Result<[u8; ISO4_PIN_BLOCK_LENGTH], 
 
     let pan_bytes = hex::decode(&pan_field_hex)?;
 
-    Ok(pan_bytes
-        .as_slice()
+    let pan_field: [u8; ISO4_PIN_BLOCK_LENGTH] = pan_bytes
         .try_into()
-        .expect("Invalid length for PAN field conversion"))
+        .map_err(|_| PinBlockError::InvalidPan)?;
+
+    Ok(pan_field)
 }
 
 /// Encipher an ISO 9564 format 4 PIN block.
@@ -318,40 +314,42 @@ pub fn encode_pan_field_iso_4(pan: &str) -> Result<[u8; ISO4_PIN_BLOCK_LENGTH], 
 ///
 /// # Errors
 ///
-/// Returns an error if:
+/// Returns [`PinBlockCryptoError::PinBlock`] if PIN or PAN processing fails.
 ///
-/// - the PIN is invalid,
-/// - the PAN is invalid,
-/// - fewer than 8 random bytes are supplied,
-/// - an intermediate block cannot be constructed,
-/// - the cryptographic provider reports an encryption error.
+/// Returns [`PinBlockCryptoError::Crypto`] if the cryptographic provider
+/// reports an encryption error.
 pub fn encipher_pinblock_iso_4<P, K: ?Sized>(
     provider: &P,
     key: &K,
     pin: &str,
     pan: &str,
     rnd_seed: Vec<u8>,
-) -> Result<Vec<u8>, Box<dyn Error>>
+) -> Result<Vec<u8>, PinBlockCryptoError<P::Error>>
 where
     P: AesBlockCipher<K>,
 {
     // Step 1: Encode PIN and PAN fields.
     let pin_field = encode_pin_field_iso_4(pin, rnd_seed)?;
+
     let pan_field = encode_pan_field_iso_4(pan)?;
 
     // Step 2: Encrypt the PIN field to produce intermediate block A.
-    let intermediate_block_a = provider.encrypt_block(key, &pin_field)?;
+    let intermediate_block_a = provider
+        .encrypt_block(key, &pin_field)
+        .map_err(PinBlockCryptoError::Crypto)?;
 
     // Step 3: XOR intermediate block A with the PAN field to produce
     // intermediate block B.
-    let intermediate_block_b = xor_byte_arrays(&intermediate_block_a, &pan_field)?;
-
-    let intermediate_block_b: [u8; ISO4_PIN_BLOCK_LENGTH] = intermediate_block_b
-        .try_into()
-        .map_err(|_| "PIN BLOCK ISO 4 ERROR: Intermediate block must be 16 bytes long")?;
+    //
+    // Both operands are fixed-size 16-byte arrays, so this operation cannot
+    // fail and does not need the generic fallible XOR helper.
+    let intermediate_block_b: [u8; ISO4_PIN_BLOCK_LENGTH] =
+        std::array::from_fn(|i| intermediate_block_a[i] ^ pan_field[i]);
 
     // Step 4: Encrypt intermediate block B.
-    let encrypted_block = provider.encrypt_block(key, &intermediate_block_b)?;
+    let encrypted_block = provider
+        .encrypt_block(key, &intermediate_block_b)
+        .map_err(PinBlockCryptoError::Crypto)?;
 
     // Step 5: Return the final encrypted PIN block.
     Ok(encrypted_block.to_vec())
@@ -379,47 +377,46 @@ where
 ///
 /// # Errors
 ///
-/// Returns an error if:
+/// Returns [`PinBlockCryptoError::PinBlock`] if the encrypted PIN block,
+/// PAN field, or recovered PIN field is invalid.
 ///
-/// - the encrypted PIN block is not exactly 16 bytes,
-/// - the PAN is invalid,
-/// - an intermediate block cannot be constructed,
-/// - the cryptographic provider reports a decryption error,
-/// - the resulting PIN field is invalid.
+/// Returns [`PinBlockCryptoError::Crypto`] if the cryptographic provider
+/// reports a decryption error.
 pub fn decipher_pinblock_iso_4<P, K: ?Sized>(
     provider: &P,
     key: &K,
     pin_block: &[u8],
     pan: &str,
-) -> Result<String, Box<dyn Error>>
+) -> Result<String, PinBlockCryptoError<P::Error>>
 where
     P: AesBlockCipher<K>,
 {
-    if pin_block.len() != ISO4_PIN_BLOCK_LENGTH {
-        return Err("PIN BLOCK ISO 4 ERROR: PIN block must be exactly 16 bytes long".into());
-    }
-
-    let pin_block: &[u8; ISO4_PIN_BLOCK_LENGTH] = pin_block
-        .try_into()
-        .map_err(|_| "PIN BLOCK ISO 4 ERROR: PIN block must be exactly 16 bytes long")?;
+    let pin_block: &[u8; ISO4_PIN_BLOCK_LENGTH] =
+        pin_block
+            .try_into()
+            .map_err(|_| PinBlockError::InvalidPinBlockLength {
+                expected: ISO4_PIN_BLOCK_LENGTH,
+                actual: pin_block.len(),
+            })?;
 
     // Step 1: Decrypt the PIN block to obtain intermediate block B.
-    let intermediate_block_b = provider.decrypt_block(key, pin_block)?;
+    let intermediate_block_b = provider
+        .decrypt_block(key, pin_block)
+        .map_err(PinBlockCryptoError::Crypto)?;
 
     // Step 2: Encode the PAN field.
     let pan_field = encode_pan_field_iso_4(pan)?;
 
     // Step 3: XOR intermediate block B with the PAN field to recover
     // intermediate block A.
-    let intermediate_block_a = xor_byte_arrays(&intermediate_block_b, &pan_field)?;
-
-    let intermediate_block_a: [u8; ISO4_PIN_BLOCK_LENGTH] = intermediate_block_a
-        .try_into()
-        .map_err(|_| "PIN BLOCK ISO 4 ERROR: Intermediate block must be 16 bytes long")?;
+    let intermediate_block_a: [u8; ISO4_PIN_BLOCK_LENGTH] =
+        std::array::from_fn(|i| intermediate_block_b[i] ^ pan_field[i]);
 
     // Step 4: Decrypt intermediate block A to recover the PIN field.
-    let pin_field = provider.decrypt_block(key, &intermediate_block_a)?;
+    let pin_field = provider
+        .decrypt_block(key, &intermediate_block_a)
+        .map_err(PinBlockCryptoError::Crypto)?;
 
     // Step 5: Decode the plaintext PIN field.
-    decode_pin_field_iso_4(&pin_field)
+    decode_pin_field_iso_4(&pin_field).map_err(PinBlockCryptoError::PinBlock)
 }
