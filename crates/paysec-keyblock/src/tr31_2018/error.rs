@@ -386,17 +386,29 @@ pub enum Tr31Error {
     UnsupportedVersion(String),
 
     /// The complete key block length is not aligned to the cipher block size.
-    TotalBlockLengthNotMultiple { block_length: usize, actual: usize },
+    TotalBlockLengthNotMultiple {
+        block_length: usize,
+        actual: usize,
+    },
 
     /// The actual key block length differs from the value encoded in the
     /// header.
-    KeyBlockLengthMismatch { expected: usize, actual: usize },
+    KeyBlockLengthMismatch {
+        expected: usize,
+        actual: usize,
+    },
 
     /// The key block is shorter than the minimum valid version D block.
-    KeyBlockBelowMinimum { minimum: usize, actual: usize },
+    KeyBlockBelowMinimum {
+        minimum: usize,
+        actual: usize,
+    },
 
     /// The decoded MAC does not have the required length.
-    InvalidMacLength { expected: usize, actual: usize },
+    InvalidMacLength {
+        expected: usize,
+        actual: usize,
+    },
 
     /// Key block authentication failed.
     MacVerificationFailed,
@@ -409,6 +421,11 @@ pub enum Tr31Error {
 
     /// Hexadecimal decoding failed.
     Hex(hex::FromHexError),
+
+    KeyBlockLengthTooLarge {
+        maximum: usize,
+        actual: usize,
+    },
 }
 
 impl Display for Tr31Error {
@@ -449,6 +466,12 @@ impl Display for Tr31Error {
             Self::Payload(error) => Display::fmt(error, f),
 
             Self::Hex(error) => Display::fmt(error, f),
+
+            Self::KeyBlockLengthTooLarge { maximum, actual } => write!(
+                f,
+                "ERROR TR-31: Key block length exceeds maximum: maximum {}, actual {}",
+                maximum, actual
+            ),
         }
     }
 }

@@ -137,6 +137,7 @@ use paysec_crypto::{AesCbc, AesCmac, AesCmacKeyDerivation, AesKeySize};
 
 const TR31_D_MAC_LEN: usize = 16;
 const TR31_D_BLOCK_LEN: usize = 16;
+const TR31_MAX_KEY_BLOCK_LENGTH: usize = 9999;
 
 /// Wrap a cryptographic key according to TR-31 key block version `D`.
 ///
@@ -167,7 +168,8 @@ const TR31_D_BLOCK_LEN: usize = 16;
 ///
 /// - the header does not specify version `D`,
 /// - payload construction fails,
-/// - the resulting key block length is invalid,
+/// - the resulting key block length is invalid or exceeds the maximum
+///   representable TR-31 header length,
 /// - header processing fails.
 ///
 /// Returns [`Tr31CryptoError::Crypto`] if the cryptographic provider reports
@@ -215,7 +217,21 @@ where
     }
 
     // Update the key block length before authenticating the header.
-    header.set_kb_length(total_block_length as u16)?;
+    if total_block_length > TR31_MAX_KEY_BLOCK_LENGTH {
+        return Err(Tr31Error::KeyBlockLengthTooLarge {
+            maximum: TR31_MAX_KEY_BLOCK_LENGTH,
+            actual: total_block_length,
+        }
+        .into());
+    }
+
+    let encoded_block_length =
+        u16::try_from(total_block_length).map_err(|_| Tr31Error::KeyBlockLengthTooLarge {
+            maximum: TR31_MAX_KEY_BLOCK_LENGTH,
+            actual: total_block_length,
+        })?;
+
+    header.set_kb_length(encoded_block_length)?;
 
     let header_str = header.export_str()?;
 

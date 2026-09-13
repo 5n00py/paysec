@@ -2,6 +2,11 @@ use super::super::KeyBlockHeader;
 use super::super::OptBlock;
 use super::super::tr31::*;
 
+use crate::{
+    Tr31CryptoError,
+    Tr31Error,
+};
+
 use paysec_crypto::AesKeySize;
 use paysec_crypto_rustcrypto::RustCryptoProvider;
 use paysec_crypto_soft_aes::SoftAesProvider;
@@ -873,5 +878,42 @@ fn test_tr31_unwrap_unsupported_version() {
             unwrap_result.is_err(),
             "Unwrapping should fail due to wrong version"
         );
+    });
+}
+
+#[test]
+fn test_tr31_wrap_rejects_key_block_length_above_maximum() {
+    for_each_crypto_provider!(provider, {
+        let header = KeyBlockHeader::new_with_values("D", "P0", "A", "E", "00", "E").unwrap();
+
+        let key = hex::decode("3F419E1CB7079442AA37474C2EFBF8B8").unwrap();
+
+        let kbpk = hex::decode("00112233445566778899AABBCCDDEEFF").unwrap();
+
+        let masked_key_length = 5000;
+
+        let random_seed = vec![0u8; 6000];
+
+        let result = tr31_wrap(
+            &provider,
+            kbpk.as_slice(),
+            AesKeySize::Bits128,
+            header,
+            &key,
+            masked_key_length,
+            &random_seed,
+        );
+
+        assert!(matches!(
+            result,
+            Err(
+                Tr31CryptoError::Tr31(
+                    Tr31Error::KeyBlockLengthTooLarge {
+                        maximum: 9999,
+                        actual,
+                    }
+                )
+            ) if actual > 9999
+        ));
     });
 }
