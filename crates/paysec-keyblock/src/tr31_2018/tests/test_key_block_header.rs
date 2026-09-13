@@ -155,7 +155,10 @@ fn test_new_from_str_failed_to_parse_optional_blocks() {
     let header_str = "B0010B1DB00N0200InvalidOptBlockData";
     let result = KeyBlockHeader::new_from_str(header_str);
     assert!(result.is_err());
-    assert_eq!(result.err().unwrap().to_string(), "ERROR TR-31 HEADER: Failed to parse optional blocks: ERROR TR-31 OPT BLOCK: Invalid ID: In");
+    assert_eq!(
+        result.err().unwrap().to_string(),
+        "ERROR TR-31 HEADER: Failed to parse optional blocks: ERROR TR-31 OPT BLOCK: Invalid ID: In"
+    );
 }
 
 #[test]

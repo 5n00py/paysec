@@ -407,20 +407,20 @@ impl OptBlock {
     fn len_from_str(s: &str) -> Result<usize, Box<dyn Error>> {
         if s.len() != 2 {
             return Err(Box::<dyn Error>::from(format!(
-            "ERROR TR-31 OPT BLOCK: Invalid length field: Expected a string with 2 characters, found '{}'",
-            s
-        )));
+                "ERROR TR-31 OPT BLOCK: Invalid length field: Expected a string with 2 characters, found '{}'",
+                s
+            )));
         }
 
-        let len = usize::from_str_radix(s, 16).map_err(|_| { 
+        let len = usize::from_str_radix(s, 16).map_err(|_| {
             Box::<dyn Error>::from(format!("ERROR TR-31 OPT BLOCK: Invalid length field: '{}' is not a valid hexadecimal number", s)) 
         })?;
 
         if len < 4 {
             return Err(Box::<dyn Error>::from(format!(
-            "ERROR TR-31 OPT BLOCK: Invalid length field: value {} is too small (must be at least 4)",
-            len
-        )));
+                "ERROR TR-31 OPT BLOCK: Invalid length field: value {} is too small (must be at least 4)",
+                len
+            )));
         }
 
         Ok(len)

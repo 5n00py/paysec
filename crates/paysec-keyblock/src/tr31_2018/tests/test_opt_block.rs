@@ -130,7 +130,10 @@ fn test_new_from_string_invalid_extended_length() {
     let num_opt_blocks = 1;
     let result = OptBlock::new_from_str(s, num_opt_blocks);
     assert!(result.is_err());
-    assert_eq!(result.unwrap_err().to_string(), "ERROR TR-31 OPT BLOCK: String containing extended length too short. Expected at least 256 characters");
+    assert_eq!(
+        result.unwrap_err().to_string(),
+        "ERROR TR-31 OPT BLOCK: String containing extended length too short. Expected at least 256 characters"
+    );
 }
 
 #[test]

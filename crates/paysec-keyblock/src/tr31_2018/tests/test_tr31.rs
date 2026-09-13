@@ -1,6 +1,6 @@
-use super::super::tr31::*;
 use super::super::KeyBlockHeader;
 use super::super::OptBlock;
+use super::super::tr31::*;
 
 #[test]
 pub fn test_tr31_wrap_example_a_7_4() {

@@ -1,5 +1,6 @@
 use crate::*;
 use hex::decode;
+use paysec_crypto_soft_aes::SoftAesProvider;
 
 #[test]
 fn test_encode_pin_field_iso_4_various_pins() {
@@ -32,56 +33,56 @@ fn test_encode_pin_field_iso_4_various_pins() {
     ];
 
     for (pin, rnd_seed_hex, expected_hex) in test_cases {
-        let rnd_seed = hex::decode(rnd_seed_hex).unwrap();
-        let expected_result = hex::decode(expected_hex).unwrap();
+        let rnd_seed = decode(rnd_seed_hex).unwrap();
+        let expected_result = decode(expected_hex).unwrap();
 
-        // Convert Vec<u8> to [u8; 16]
         let mut expected_bytes = [0u8; 16];
         expected_bytes.copy_from_slice(&expected_result);
 
         assert_eq!(
             encode_pin_field_iso_4(pin, rnd_seed).unwrap(),
             expected_bytes,
-            "Failed test for PIN: {}",
-            pin
+            "Failed test for PIN: {pin}"
         );
     }
 }
 
 #[test]
 fn test_encode_pin_field_iso_4_invalid_pin_length() {
-    // Test case: PIN length is less than 4, should return an error.
     let pin = "123";
     let rnd_seed = decode("0000000000000000").unwrap();
-    assert!(matches!(encode_pin_field_iso_4(pin, rnd_seed), Err(_)));
 
-    // Test case: PIN length is greater than 12, should return an error.
+    assert!(encode_pin_field_iso_4(pin, rnd_seed).is_err());
+
     let pin = "1234567890123";
     let rnd_seed = decode("0000000000000000").unwrap();
-    assert!(matches!(encode_pin_field_iso_4(pin, rnd_seed), Err(_)));
+
+    assert!(encode_pin_field_iso_4(pin, rnd_seed).is_err());
 }
 
 #[test]
 fn test_encode_pin_field_iso_4_non_numeric_pin() {
-    // Test case: PIN contains non-numeric characters, should return an error.
     let pin = "12A4";
     let rnd_seed = decode("0000000000000000").unwrap();
-    assert!(matches!(encode_pin_field_iso_4(pin, rnd_seed), Err(_)));
+
+    assert!(encode_pin_field_iso_4(pin, rnd_seed).is_err());
 }
 
 #[test]
 fn test_encode_pin_field_iso_4_invalid_rnd_seed_length() {
-    // Test case: rnd_seed is not exactly 8 bytes long, should return an error.
     let pin = "1234";
-    let rnd_seed = decode("00000000").unwrap(); // Invalid length
-    assert!(matches!(encode_pin_field_iso_4(pin, rnd_seed), Err(_)));
+    let rnd_seed = decode("00000000").unwrap();
+
+    assert!(encode_pin_field_iso_4(pin, rnd_seed).is_err());
 }
 
 #[test]
 fn test_encode_pin_field_iso_4_too_short() {
-    let pin = "123"; // Too short
+    let pin = "123";
     let rnd_seed = vec![0u8; 8];
+
     let result = encode_pin_field_iso_4(pin, rnd_seed);
+
     assert!(result.is_err());
     assert_eq!(
         result.unwrap_err().to_string(),
@@ -91,9 +92,11 @@ fn test_encode_pin_field_iso_4_too_short() {
 
 #[test]
 fn test_encode_pin_field_iso_4_too_long() {
-    let pin = "1234567890123"; // Too long
+    let pin = "1234567890123";
     let rnd_seed = vec![0u8; 8];
+
     let result = encode_pin_field_iso_4(pin, rnd_seed);
+
     assert!(result.is_err());
     assert_eq!(
         result.unwrap_err().to_string(),
@@ -112,41 +115,50 @@ fn test_decode_pin_field_iso_4_various_pins() {
     ];
 
     for (expected_pin, encoded_hex) in test_cases {
-        let encoded_bytes = hex::decode(encoded_hex).unwrap();
+        let encoded_bytes = decode(encoded_hex).unwrap();
+
         assert_eq!(
             decode_pin_field_iso_4(&encoded_bytes).unwrap(),
             expected_pin,
-            "Failed test for encoded PIN field: {}",
-            encoded_hex
+            "Failed test for encoded PIN field: {encoded_hex}"
         );
     }
 }
 
 #[test]
 fn test_decode_pin_field_iso_4_invalid_length() {
-    let pin_field = vec![0u8; 15]; // Less than 16 bytes
+    let pin_field = vec![0u8; 15];
+
     assert!(matches!(
         decode_pin_field_iso_4(&pin_field),
-        Err(e) if e.to_string() == "PIN BLOCK ISO 4 ERROR: PIN field must be 16 bytes long"
+        Err(e)
+            if e.to_string()
+                == "PIN BLOCK ISO 4 ERROR: PIN field must be 16 bytes long"
     ));
 }
 
 #[test]
 fn test_decode_pin_field_iso_4_invalid_control_field() {
     let mut pin_field = vec![0u8; 16];
-    pin_field[0] = 0x30; // Control field not 4
+    pin_field[0] = 0x30;
+
     assert!(matches!(
         decode_pin_field_iso_4(&pin_field),
-        Err(e) if e.to_string().contains("PIN block is not ISO format 4: control field")
+        Err(e)
+            if e.to_string()
+                .contains("PIN block is not ISO format 4: control field")
     ));
 }
 
 #[test]
 fn test_decode_pin_field_iso_4_invalid_pin_length() {
-    let pin_field = vec![0x40; 16]; // PIN length 0
+    let pin_field = vec![0x40; 16];
+
     assert!(matches!(
         decode_pin_field_iso_4(&pin_field),
-        Err(e) if e.to_string().contains("PIN length must be between 4 and 12")
+        Err(e)
+            if e.to_string()
+                .contains("PIN length must be between 4 and 12")
     ));
 }
 
@@ -156,9 +168,12 @@ fn test_decode_pin_field_iso_4_non_numeric_pin() {
         0x44, 0xAB, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA,
         0xAA,
     ];
+
     assert!(matches!(
         decode_pin_field_iso_4(&pin_field),
-        Err(e) if e.to_string() == "PIN BLOCK ISO 4 ERROR: PIN contains invalid digit"
+        Err(e)
+            if e.to_string()
+                == "PIN BLOCK ISO 4 ERROR: PIN contains invalid digit"
     ));
 }
 
@@ -167,10 +182,13 @@ fn test_decode_pin_field_iso_4_invalid_filler() {
     let pin_field = vec![
         0x44, 0x12, 0x34, 0x56, 0x78, 0x9A, 0xBC, 0xDE, 0xF0, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
         0x00,
-    ]; // Filler not 0xA
+    ];
+
     assert!(matches!(
         decode_pin_field_iso_4(&pin_field),
-        Err(e) if e.to_string() == "PIN BLOCK ISO 4 ERROR: PIN block filler is incorrect"
+        Err(e)
+            if e.to_string()
+                == "PIN BLOCK ISO 4 ERROR: PIN block filler is incorrect"
     ));
 }
 
@@ -193,25 +211,23 @@ fn test_encode_pan_field_iso_4_various_pans() {
     ];
 
     for (pan, expected_hex) in test_cases {
-        let expected_result = hex::decode(expected_hex).unwrap();
+        let expected_result = decode(expected_hex).unwrap();
 
-        // Convert Vec<u8> to [u8; 16]
         let mut expected_bytes = [0u8; 16];
         expected_bytes.copy_from_slice(&expected_result);
 
         assert_eq!(
             encode_pan_field_iso_4(pan).unwrap(),
             expected_bytes,
-            "Failed test for PAN: {}",
-            pan
+            "Failed test for PAN: {pan}"
         );
     }
 }
 
 #[test]
 fn test_encode_pan_field_iso_4_too_short() {
-    let pan = ""; // Too short
-    let result = encode_pan_field_iso_4(pan);
+    let result = encode_pan_field_iso_4("");
+
     assert!(result.is_err());
     assert_eq!(
         result.unwrap_err().to_string(),
@@ -221,8 +237,8 @@ fn test_encode_pan_field_iso_4_too_short() {
 
 #[test]
 fn test_encode_pan_field_iso_4_too_long() {
-    let pan = "12345678901234567890"; // Too long
-    let result = encode_pan_field_iso_4(pan);
+    let result = encode_pan_field_iso_4("12345678901234567890");
+
     assert!(result.is_err());
     assert_eq!(
         result.unwrap_err().to_string(),
@@ -232,8 +248,8 @@ fn test_encode_pan_field_iso_4_too_long() {
 
 #[test]
 fn test_encode_pan_field_iso_4_invalid_char() {
-    let pan = "123456789x123456789"; // Too long
-    let result = encode_pan_field_iso_4(pan);
+    let result = encode_pan_field_iso_4("123456789x123456789");
+
     assert!(result.is_err());
     assert_eq!(
         result.unwrap_err().to_string(),
@@ -243,15 +259,19 @@ fn test_encode_pan_field_iso_4_invalid_char() {
 
 #[test]
 fn test_encipher_pinblock_iso_4_valid() {
-    let key = hex::decode("00112233445566778899AABBCCDDEEFF").expect("Invalid key hex");
+    let provider = SoftAesProvider::new();
+
+    let key = decode("00112233445566778899AABBCCDDEEFF").expect("Invalid key hex");
+
     let pin = "1234";
     let pan = "1234567890123456789";
-    let expected_pin_block = "28B41FDDD29B743E93124BD8E32D921E";
-
     let rnd_seed = vec![0xFF; 8];
 
-    let result =
-        encipher_pinblock_iso_4(&key, pin, pan, rnd_seed).expect("Failed to encipher pinblock");
+    let expected_pin_block = "28B41FDDD29B743E93124BD8E32D921E";
+
+    let result = encipher_pinblock_iso_4(&provider, key.as_slice(), pin, pan, rnd_seed)
+        .expect("Failed to encipher PIN block");
+
     let result_hex = hex::encode(result).to_uppercase();
 
     assert_eq!(result_hex, expected_pin_block);
@@ -259,7 +279,9 @@ fn test_encipher_pinblock_iso_4_valid() {
 
 #[test]
 fn test_decipher_pinblock_iso_4_various() {
-    let key = hex::decode("00112233445566778899AABBCCDDEEFF").unwrap();
+    let provider = SoftAesProvider::new();
+
+    let key = decode("00112233445566778899AABBCCDDEEFF").expect("Invalid key hex");
 
     let test_cases = [
         (
@@ -280,9 +302,12 @@ fn test_decipher_pinblock_iso_4_various() {
     ];
 
     for (expected_pin, pan, encrypted_pin_block_hex) in test_cases {
-        let encrypted_pin_block = hex::decode(encrypted_pin_block_hex).unwrap();
-        let decrypted_pin = decipher_pinblock_iso_4(&key, &encrypted_pin_block, pan)
-            .expect("Failed to decipher pinblock");
+        let encrypted_pin_block = decode(encrypted_pin_block_hex).unwrap();
+
+        let decrypted_pin =
+            decipher_pinblock_iso_4(&provider, key.as_slice(), &encrypted_pin_block, pan)
+                .expect("Failed to decipher PIN block");
+
         assert_eq!(
             decrypted_pin, expected_pin,
             "Deciphered PIN does not match expected PIN"
