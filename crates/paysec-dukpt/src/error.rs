@@ -13,6 +13,10 @@ pub enum DukptError<E> {
         derivation_key_size: AesKeySize,
         working_key_size: AesKeySize,
     },
+
+    /// The Update Key counter was supplied to ordinary working-key
+    /// derivation.
+    UpdateKeyCounterNotAllowed,
 }
 
 impl<E> fmt::Display for DukptError<E>
@@ -37,6 +41,10 @@ where
                     working_key_size.bytes() * 8,
                 )
             }
+
+            Self::UpdateKeyCounterNotAllowed => f.write_str(
+                "transaction counter 0xFFFFFFFF is reserved for DUKPT Update Key derivation",
+            ),
         }
     }
 }
@@ -50,6 +58,8 @@ where
             Self::Crypto(error) => Some(error),
 
             Self::WorkingKeyTooStrong { .. } => None,
+
+            Self::UpdateKeyCounterNotAllowed => None,
         }
     }
 }

@@ -2,7 +2,10 @@ use paysec_crypto::{AesBlockCipher, AesKeySize};
 
 use zeroize::Zeroizing;
 
-use crate::{DukptError, DukptKey, InitialKeyId, KeySerialNumber, WorkingKeyUsage};
+use crate::{
+    DukptError, DukptKey, InitialKeyId, KeySerialNumber, WorkingKeyUsage,
+    ksn::UPDATE_KEY_TRANSACTION_COUNTER,
+};
 
 const AES_BLOCK_SIZE: usize = 16;
 
@@ -13,8 +16,6 @@ const KEY_USAGE_KEY_DERIVATION: u16 = 0x8000;
 const KEY_USAGE_INITIAL_KEY_DERIVATION: u16 = 0x8001;
 
 const TRANSACTION_COUNTER_MSB: u32 = 0x8000_0000;
-
-const UPDATE_KEY_TRANSACTION_COUNTER: u32 = 0xFFFF_FFFF;
 
 /// Returns the ANSI X9.24-3 algorithm indicator and key length in bits for
 /// the requested AES key size.
@@ -410,6 +411,10 @@ where
 ///
 /// # Errors
 ///
+/// Returns [`DukptError::UpdateKeyCounterNotAllowed`] if the KSN contains
+/// transaction counter `0xFFFF_FFFF`, which is reserved for DUKPT Update Key
+/// derivation. Use [`derive_update_key`] for that operation.
+///
 /// Returns [`DukptError::WorkingKeyTooStrong`] if `working_key_size` is
 /// stronger than `derivation_key_size`.
 ///
@@ -426,6 +431,10 @@ pub fn derive_working_key<P, K: ?Sized>(
 where
     P: AesBlockCipher<K> + AesBlockCipher<[u8]>,
 {
+    if ksn.is_update_key() {
+        return Err(DukptError::UpdateKeyCounterNotAllowed);
+    }
+
     if !working_key_size_is_allowed(derivation_key_size, working_key_size) {
         return Err(DukptError::WorkingKeyTooStrong {
             derivation_key_size,

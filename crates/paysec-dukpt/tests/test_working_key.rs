@@ -454,3 +454,36 @@ fn test_derive_aes_192_working_keys_from_aes_192_bdk() {
         assert_aes_192_vectors(&provider, AesKeySize::Bits192, AES_192_TO_AES_192_VECTORS);
     });
 }
+
+#[test]
+fn test_reject_update_key_counter_for_working_key() {
+    for_each_crypto_provider!(provider, {
+        let bdk = hex::decode("FEDCBA9876543210F1F1F1F1F1F1F1F1").unwrap();
+
+        let ksn = KeySerialNumber::from_parts(0x12345678, 0x90123456, 0xFFFF_FFFF);
+
+        let result = derive_working_key(
+            &provider,
+            bdk.as_slice(),
+            AesKeySize::Bits128,
+            WorkingKeyUsage::PinEncryption,
+            AesKeySize::Bits128,
+            ksn,
+        );
+
+        assert!(matches!(
+            result,
+            Err(DukptError::UpdateKeyCounterNotAllowed)
+        ));
+    });
+}
+
+#[test]
+fn test_ksn_update_key_counter() {
+    let update_ksn = KeySerialNumber::from_parts(0x12345678, 0x90123456, 0xFFFF_FFFF);
+
+    let transaction_ksn = KeySerialNumber::from_parts(0x12345678, 0x90123456, 1);
+
+    assert!(update_ksn.is_update_key());
+    assert!(!transaction_ksn.is_update_key());
+}

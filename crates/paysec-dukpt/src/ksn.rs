@@ -1,5 +1,7 @@
 use crate::InitialKeyId;
 
+pub(crate) const UPDATE_KEY_TRANSACTION_COUNTER: u32 = 0xFFFF_FFFF;
+
 /// Native ANSI X9.24-3 AES DUKPT Key Serial Number.
 ///
 /// A native AES DUKPT KSN is 96 bits:
@@ -70,6 +72,12 @@ impl KeySerialNumber {
         value[8..].copy_from_slice(&self.transaction_counter.to_be_bytes());
 
         value
+    }
+
+    /// Returns whether this KSN contains the transaction counter reserved
+    /// for DUKPT Update Key derivation.
+    pub const fn is_update_key(&self) -> bool {
+        self.transaction_counter == UPDATE_KEY_TRANSACTION_COUNTER
     }
 }
 
