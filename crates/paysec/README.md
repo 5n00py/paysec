@@ -1,103 +1,155 @@
 # paysec
 
-`paysec` is the facade crate for the
-[paysec](https://github.com/5n00py/paysec) payment-security workspace.
+Convenience facade for the `paysec` payment-security crates.
 
-It provides a convenient entry point for functionality related to payment
-security standards while keeping PIN block processing, key block processing,
-and cryptographic implementations separated into focused crates.
+`paysec` provides a single entry point for the project's high-level
+payment-security functionality while keeping cryptographic provider
+implementations as explicit dependencies.
 
-## Current functionality
+## Modules
 
 The facade currently exposes:
 
-* `paysec::pinblock` — PIN block functionality, including ISO 9564 format 3
-  and format 4 processing.
-* `paysec::keyblock` — key block functionality, including TR-31:2018 version D
-  wrapping and unwrapping.
+- `paysec::dukpt`
+  - ANSI X9.24-3 AES DUKPT
+  - host / receiving-side derivation
+  - native 96-bit KSNs
+  - Initial Keys, transaction working keys, and Update Keys
 
-Cryptographic operations are provided separately through the `paysec-crypto`
-provider interfaces.
+- `paysec::keyblock`
+  - ASC X9 TR-31 key blocks
+  - Version D wrapping and unwrapping
+  - headers and optional blocks
+
+- `paysec::pinblock`
+  - ISO 9564 PIN blocks
+  - Format 3
+  - Format 4 with AES protection
+
+The underlying crates remain independently versioned and can also be used
+directly.
 
 ## Installation
 
-Add the facade crate:
+```toml
+[dependencies]
+paysec = "0.3"
+````
+
+Operations that perform cryptography also require a provider. For example,
+using the RustCrypto-based provider:
 
 ```toml
 [dependencies]
-paysec = "0.2"
+paysec = "0.3"
+paysec-crypto = "0.2.1"
+paysec-crypto-rustcrypto = "0.2.1"
 ```
 
-For cryptographic operations, also select a provider. For example, using the
-RustCrypto-based provider:
+The `paysec-crypto` dependency is useful for common cryptographic types such
+as `AesKeySize`, while `paysec-crypto-rustcrypto` supplies the concrete
+provider.
+
+## AES DUKPT example
+
+The following example derives an AES-128 PIN working key from a Base
+Derivation Key and native 96-bit AES DUKPT Key Serial Number:
+
+```rust
+use paysec::dukpt::{
+    derive_working_key,
+    KeySerialNumber,
+    WorkingKeyUsage,
+};
+
+use paysec_crypto::AesKeySize;
+use paysec_crypto_rustcrypto::RustCryptoProvider;
+
+let provider = RustCryptoProvider::new();
+
+let bdk = hex::decode(
+    "FEDCBA9876543210F1F1F1F1F1F1F1F1",
+)
+.unwrap();
+
+let ksn = KeySerialNumber::from_parts(
+    0x12345678,
+    0x90123456,
+    0x0000_0001,
+);
+
+let working_key = derive_working_key(
+    &provider,
+    bdk.as_slice(),
+    AesKeySize::Bits128,
+    WorkingKeyUsage::PinEncryption,
+    AesKeySize::Bits128,
+    ksn,
+)
+.unwrap();
+
+assert_eq!(
+    hex::encode_upper(
+        working_key.expose_secret(),
+    ),
+    "AF8CB133A78F8DC2D1359F18527593FB",
+);
+```
+
+To run the example exactly as written, add:
+
+```toml
+hex = "0.4"
+```
+
+## Direct crate usage
+
+Applications can also depend directly on the focused crates:
 
 ```toml
 [dependencies]
-paysec = "0.2"
-paysec-crypto-rustcrypto = "0.2"
+paysec-dukpt = "0.1"
+paysec-keyblock = "0.2.1"
+paysec-pinblock = "0.2.1"
 ```
 
-Alternatively, the `soft-aes` provider is available:
+See their individual documentation for detailed functionality and examples:
 
-```toml
-[dependencies]
-paysec = "0.2"
-paysec-crypto-soft-aes = "0.2"
-```
-
-## Workspace crates
-
-The paysec project is split into several crates:
-
-* `paysec` — facade crate
-* `paysec-pinblock` — PIN block processing
-* `paysec-keyblock` — TR-31 key block processing
-* `paysec-crypto` — cryptographic provider interfaces
-* `paysec-crypto-rustcrypto` — RustCrypto provider
-* `paysec-crypto-soft-aes` — soft-aes provider
-
-This separation allows applications to depend only on the functionality and
-cryptographic backend they require.
+* [`paysec-dukpt`](../paysec-dukpt/README.md)
+* [`paysec-keyblock`](../paysec-keyblock/README.md)
+* [`paysec-pinblock`](../paysec-pinblock/README.md)
 
 ## Cryptographic providers
 
-The cryptographic API is provider-based rather than tied to one AES
-implementation.
+The facade does not select or bundle a cryptographic implementation.
 
-The included providers use software-managed raw key material. The provider
-interfaces are designed so that other implementations can use different key
-representations, including opaque handles managed by an HSM.
+Cryptographic operations are delegated through the provider traits defined by
+`paysec-crypto`. Current software implementations include:
 
-No HSM provider is currently included.
+* `paysec-crypto-rustcrypto`
+* `paysec-crypto-soft-aes`
 
-## Sensitive data
+This keeps payment-standard functionality separate from the chosen
+cryptographic backend.
 
-Plaintext sensitive values returned by the library use dedicated types where
-appropriate:
+## Security
 
-* `Pin` for plaintext PIN values
-* `SecretKey` for plaintext key material returned from TR-31 unwrapping
+The software providers operate on key material in application memory and do
+not provide the isolation or non-exportability guarantees of a Hardware
+Security Module.
 
-These types redact their contents from `Debug`, zeroize owned secret data on
-drop, and require explicit access through `expose_secret()`.
+The payment-security crates use dedicated secret types where appropriate,
+including redacted debug output and zeroization of owned secret material.
 
-Applications remain responsible for the complete lifecycle and protection of
-sensitive data outside these types.
+Using this library does not by itself establish compliance with PCI, ANSI,
+ISO, or other payment-security requirements.
 
-## Documentation
-
-API documentation is available on
-[docs.rs](https://docs.rs/paysec).
-
-For architecture, security considerations, examples, development information,
-and the complete workspace overview, see the
-[paysec repository](https://github.com/5n00py/paysec).
+For the complete project overview, see the
+[`paysec` repository](https://github.com/5n00py/paysec).
 
 ## License
 
-Licensed under the GNU General Public License version 3 (`GPL-3.0`).
+`paysec` is licensed under the GNU General Public License Version 3.0
+(`GPL-3.0`).
 
-Copyright © David Schmid.
-
-Payment-security standards referenced by this project remain the intellectual
-property of their respective standards organizations and rights holders.
+See the repository `LICENSE` file for the complete license terms.

@@ -1,29 +1,29 @@
 [package]
-name = "paysec-keyblock"
-version = "0.2.1"
+name = "paysec-dukpt"
+version = "0.1.0"
 edition.workspace = true
 rust-version.workspace = true
 authors.workspace = true
 license.workspace = true
 repository.workspace = true
 
-description = "TR-31 key block processing for payment security applications."
-documentation = "https://docs.rs/paysec-keyblock"
+description = "AES DUKPT key derivation for payment security applications."
+documentation = "https://docs.rs/paysec-dukpt"
 readme = "README.md"
 keywords = [
     "payments",
     "payment-security",
-    "key-block",
-    "tr31",
+    "dukpt",
+    "aes",
     "cryptography",
 ]
 categories = ["cryptography"]
 
 [dependencies]
-hex.workspace = true
 paysec-crypto.workspace = true
 zeroize.workspace = true
 
 [dev-dependencies]
+hex.workspace = true
 paysec-crypto-rustcrypto.workspace = true
 paysec-crypto-soft-aes.workspace = true
