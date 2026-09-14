@@ -3,7 +3,9 @@ use paysec_crypto::AesKeySize;
 use paysec_crypto_rustcrypto::RustCryptoProvider;
 use paysec_crypto_soft_aes::SoftAesProvider;
 
-use paysec_dukpt::{DukptError, InitialKeyId, WorkingKeyUsage, derive_working_key};
+use paysec_dukpt::{
+    DukptError, InitialKeyId, KeySerialNumber, WorkingKeyUsage, derive_working_key,
+};
 
 macro_rules! for_each_crypto_provider {
     ($provider:ident, $body:block) => {{
@@ -91,14 +93,15 @@ fn assert_working_key<P>(
 ) where
     P: paysec_crypto::AesBlockCipher<[u8]>,
 {
+    let ksn = KeySerialNumber::new(initial_key_id, counter);
+
     let key = derive_working_key(
         provider,
         bdk,
         derivation_key_size,
         usage,
         working_key_size,
-        initial_key_id,
-        counter,
+        ksn,
     )
     .unwrap();
 
@@ -158,14 +161,15 @@ fn test_reject_working_key_stronger_than_derivation_key() {
     for_each_crypto_provider!(provider, {
         let bdk = hex::decode("FEDCBA9876543210F1F1F1F1F1F1F1F1").unwrap();
 
+        let ksn = KeySerialNumber::new(InitialKeyId::from_parts(0x12345678, 0x90123456), 1);
+
         let result = derive_working_key(
             &provider,
             bdk.as_slice(),
             AesKeySize::Bits128,
             WorkingKeyUsage::PinEncryption,
             AesKeySize::Bits256,
-            InitialKeyId::from_parts(0x12345678, 0x90123456),
-            1,
+            ksn,
         );
 
         assert!(matches!(

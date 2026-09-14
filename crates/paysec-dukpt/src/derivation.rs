@@ -2,7 +2,7 @@ use paysec_crypto::{AesBlockCipher, AesKeySize};
 
 use zeroize::Zeroizing;
 
-use crate::{DukptError, DukptKey, InitialKeyId, WorkingKeyUsage};
+use crate::{DukptError, DukptKey, InitialKeyId, KeySerialNumber, WorkingKeyUsage};
 
 const AES_BLOCK_SIZE: usize = 16;
 
@@ -319,7 +319,8 @@ where
 
 /// Derives an AES DUKPT working key on the receiving / host side.
 ///
-/// The function reconstructs the transaction key hierarchy from the BDK:
+/// The function reconstructs the transaction key hierarchy from the BDK and
+/// the supplied [`KeySerialNumber`]:
 ///
 /// ```text
 /// BDK
@@ -334,10 +335,11 @@ where
 /// Working Key
 /// ```
 ///
-/// The transaction counter determines the path through the intermediate
-/// derivation-key tree. The working-key usage is included in the final
-/// derivation data so that keys intended for different purposes are
-/// cryptographically separated.
+/// The KSN identifies the Initial Key and contains the transaction counter
+/// used to determine the path through the intermediate derivation-key tree.
+///
+/// The working-key usage is included in the final derivation data so that
+/// keys intended for different purposes are cryptographically separated.
 ///
 /// The BDK, Initial Key, and intermediate derivation keys all use
 /// `derivation_key_size`. The final working key may use the same AES size
@@ -351,12 +353,58 @@ where
 ///   intermediate derivation keys.
 /// * `working_key_usage` - Intended purpose of the resulting working key.
 /// * `working_key_size` - AES size of the resulting working key.
-/// * `initial_key_id` - 64-bit Initial Key ID.
-/// * `transaction_counter` - 32-bit transaction counter.
+/// * `ksn` - Native 96-bit AES DUKPT Key Serial Number identifying the
+///   Initial Key and transaction counter.
 ///
 /// # Returns
 ///
 /// The transaction working key wrapped in [`DukptKey`].
+///
+/// # Examples
+///
+/// ```
+/// use paysec_crypto::AesKeySize;
+/// use paysec_crypto_rustcrypto::RustCryptoProvider;
+///
+/// use paysec_dukpt::{
+///     derive_working_key,
+///     KeySerialNumber,
+///     WorkingKeyUsage,
+/// };
+///
+/// let provider = RustCryptoProvider::new();
+///
+/// let bdk =
+///     hex::decode(
+///         "FEDCBA9876543210F1F1F1F1F1F1F1F1",
+///     )
+///     .unwrap();
+///
+/// let ksn =
+///     KeySerialNumber::from_parts(
+///         0x12345678,
+///         0x90123456,
+///         0x0000_0001,
+///     );
+///
+/// let pin_key =
+///     derive_working_key(
+///         &provider,
+///         bdk.as_slice(),
+///         AesKeySize::Bits128,
+///         WorkingKeyUsage::PinEncryption,
+///         AesKeySize::Bits128,
+///         ksn,
+///     )
+///     .unwrap();
+///
+/// assert_eq!(
+///     hex::encode_upper(
+///         pin_key.expose_secret(),
+///     ),
+///     "AF8CB133A78F8DC2D1359F18527593FB",
+/// );
+/// ```
 ///
 /// # Errors
 ///
@@ -371,8 +419,7 @@ pub fn derive_working_key<P, K: ?Sized>(
     derivation_key_size: AesKeySize,
     working_key_usage: WorkingKeyUsage,
     working_key_size: AesKeySize,
-    initial_key_id: InitialKeyId,
-    transaction_counter: u32,
+    ksn: KeySerialNumber,
 ) -> Result<DukptKey, DukptError<P::Error>>
 where
     P: AesBlockCipher<K> + AesBlockCipher<[u8]>,
@@ -383,6 +430,10 @@ where
             working_key_size,
         });
     }
+
+    let initial_key_id = ksn.initial_key_id();
+
+    let transaction_counter = ksn.transaction_counter();
 
     let initial_key = derive_initial_key(provider, bdk, derivation_key_size, initial_key_id)?;
 
