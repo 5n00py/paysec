@@ -14,6 +14,8 @@ const KEY_USAGE_INITIAL_KEY_DERIVATION: u16 = 0x8001;
 
 const TRANSACTION_COUNTER_MSB: u32 = 0x8000_0000;
 
+const UPDATE_KEY_TRANSACTION_COUNTER: u32 = 0xFFFF_FFFF;
+
 /// Returns the ANSI X9.24-3 algorithm indicator and key length in bits for
 /// the requested AES key size.
 fn aes_key_parameters(key_size: AesKeySize) -> (u16, u16) {
@@ -455,6 +457,61 @@ where
     )
 }
 
+/// Derives the AES DUKPT Update Key for an Initial Key ID.
+///
+/// The DUKPT Update Key is a Key Encryption Key used to protect a new
+/// Initial Key when updating a transaction-originating device.
+///
+/// ANSI X9.24-3 reserves transaction counter `0xFFFF_FFFF` exclusively for
+/// this purpose. It is not a normal transaction counter.
+///
+/// The Update Key has the same AES key size as the BDK, Initial Key, and
+/// intermediate derivation keys.
+///
+/// # Parameters
+///
+/// * `provider` - Provider used for AES block encryption.
+/// * `bdk` - Provider-specific Base Derivation Key.
+/// * `derivation_key_size` - AES size of the BDK and resulting Update Key.
+/// * `initial_key_id` - Initial Key ID associated with the current Initial Key.
+///
+/// # Returns
+///
+/// The derived DUKPT Update Key wrapped in [`DukptKey`].
+///
+/// # Errors
+///
+/// Returns [`DukptError::Crypto`] if the cryptographic provider fails while
+/// performing an AES operation.
+pub fn derive_update_key<P, K: ?Sized>(
+    provider: &P,
+    bdk: &K,
+    derivation_key_size: AesKeySize,
+    initial_key_id: InitialKeyId,
+) -> Result<DukptKey, DukptError<P::Error>>
+where
+    P: AesBlockCipher<K> + AesBlockCipher<[u8]>,
+{
+    let initial_key = derive_initial_key(provider, bdk, derivation_key_size, initial_key_id)?;
+
+    let intermediate_key = derive_intermediate_key(
+        provider,
+        initial_key,
+        derivation_key_size,
+        initial_key_id,
+        UPDATE_KEY_TRANSACTION_COUNTER,
+    )?;
+
+    derive_working_key_from_intermediate(
+        provider,
+        &intermediate_key,
+        WorkingKeyUsage::KeyEncryption,
+        derivation_key_size,
+        initial_key_id,
+        UPDATE_KEY_TRANSACTION_COUNTER,
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -596,5 +653,22 @@ mod tests {
             AesKeySize::Bits256,
             AesKeySize::Bits256,
         ));
+    }
+
+    #[test]
+    fn test_update_key_derivation_data_aes_128() {
+        let initial_key_id = InitialKeyId::from_parts(0x12345678, 0x90123456);
+
+        let derivation_data = create_other_key_derivation_data(
+            WorkingKeyUsage::KeyEncryption.indicator(),
+            AesKeySize::Bits128,
+            initial_key_id,
+            UPDATE_KEY_TRANSACTION_COUNTER,
+        );
+
+        assert_eq!(
+            hex::encode_upper(derivation_data),
+            "010100020002008090123456FFFFFFFF",
+        );
     }
 }
