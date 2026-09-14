@@ -1,77 +1,80 @@
 # paysec
 
-`paysec` is a Rust library for implementing, testing, and working with
+`paysec` is a Rust project for implementing, testing, and working with
 payment-security standards used in retail payment systems.
 
-The project currently focuses on PIN block processing and symmetric key blocks,
-with an emphasis on AES-based standards and an architecture that separates
-payment-standard logic from cryptographic implementations.
+The project provides standards-oriented building blocks for payment
+cryptography, including PIN blocks, symmetric key blocks, and AES DUKPT key
+derivation.
 
-The library can be used with software cryptographic providers for development,
-testing, interoperability work, and deterministic test-vector generation. Its
-crypto abstraction is also designed to support providers that use opaque or
-non-exportable key handles, such as future HSM-backed implementations.
+Payment-standard logic is separated from cryptographic implementations through
+provider traits, allowing applications to select the cryptographic backend
+appropriate for their environment.
 
 ## Current Status
 
-`paysec` is under active development.
+`paysec` is under active development and currently requires **Rust 1.89 or
+newer**.
 
-The current workspace version is **0.2.0** and requires **Rust 1.89 or newer**.
+Implemented functionality includes:
 
-Currently implemented standards include:
+- **ANSI X9.24-3 AES DUKPT**
+  - receiving-side / host key derivation
+  - native 96-bit AES Key Serial Numbers
+  - AES-128, AES-192, and AES-256
+  - Initial Key derivation
+  - transaction working-key derivation
+  - DUKPT Update Key derivation
 
-* **ASC X9 TR 31-2018**
+- **ASC X9 TR-31-2018**
+  - key block Version `D`
+  - AES-based key block protection
+  - key wrapping and unwrapping
+  - key block headers and optional blocks
+  - KBEK and KBAK derivation using AES-CMAC
 
-  * key block version `D`
-  * AES-based key block protection
-  * KBEK and KBAK derivation using AES-CMAC
-  * key wrapping and unwrapping
-  * key block headers and optional blocks
-  * masked key lengths and payload padding
-  * header and key block validation
+- **ISO 9564 PIN blocks**
+  - Format 3 encoding and decoding
+  - Format 4 encoding and decoding
+  - AES-based Format 4 enciphering and deciphering
+  - PIN and PAN processing
 
-* **ISO 9564 PIN block format 4**
+## Workspace
 
-  * PIN field encoding and decoding
-  * PAN field encoding
-  * AES-based PIN block enciphering and deciphering
-  * PAN binding
-  * provider-independent AES operations
+The project is organized as independently versioned Cargo crates.
 
-* **ISO 9564 PIN block format 3**
+| Crate | Version | Purpose |
+| --- | --- | --- |
+| [`paysec`](crates/paysec/README.md) | `0.3.0` | Convenience facade for payment-security functionality |
+| [`paysec-dukpt`](crates/paysec-dukpt/README.md) | `0.1.0` | ANSI X9.24-3 AES DUKPT host-side key derivation |
+| [`paysec-keyblock`](crates/paysec-keyblock/README.md) | `0.2.1` | TR-31 key block processing |
+| [`paysec-pinblock`](crates/paysec-pinblock/README.md) | `0.2.1` | ISO 9564 PIN block processing |
+| [`paysec-crypto`](crates/paysec-crypto/README.md) | `0.2.1` | Provider-independent cryptographic capability traits |
+| [`paysec-crypto-rustcrypto`](crates/paysec-crypto-rustcrypto/README.md) | `0.2.1` | RustCrypto-based software provider |
+| [`paysec-crypto-soft-aes`](crates/paysec-crypto-soft-aes/README.md) | `0.2.1` | `soft-aes` based software provider |
 
-  * PIN block encoding and decoding
-  * PIN/PAN field processing
-  * cryptographic protection is intentionally left to a separate operation
+Each crate README contains its supported functionality, installation
+instructions, examples, and crate-specific security considerations.
 
-## Workspace Structure
+## Facade
 
-`paysec` is organized as a Cargo workspace:
-
-| Crate                      | Purpose                                                                                 |
-| -------------------------- | --------------------------------------------------------------------------------------- |
-| `paysec`                   | Convenience facade exposing the key block and PIN block crates                          |
-| `paysec-crypto`            | Provider-independent cryptographic capability traits                                    |
-| `paysec-crypto-soft-aes`   | `soft-aes` based software provider, primarily useful as a reference and testing backend |
-| `paysec-crypto-rustcrypto` | Software provider based on RustCrypto AES, CBC, and CMAC implementations                |
-| `paysec-pinblock`          | ISO 9564 PIN block processing                                                           |
-| `paysec-keyblock`          | TR-31 key block processing                                                              |
-
-The facade crate exposes the payment-standard functionality through:
+The `paysec` crate exposes the high-level payment-security crates through:
 
 ```rust
-paysec::pinblock
+paysec::dukpt
 paysec::keyblock
-```
+paysec::pinblock
+````
 
-The cryptographic provider crates remain separate dependencies so applications
-can explicitly select the backend appropriate for their environment.
+Cryptographic providers remain separate dependencies so applications can
+explicitly select the backend appropriate for their environment.
 
-## Cryptographic Provider Model
+## Architecture
 
-Payment-standard processing is separated from cryptographic implementations.
+Payment-standard processing is kept separate from cryptographic
+implementations.
 
-The `paysec-crypto` crate defines capability traits such as:
+The `paysec-crypto` crate defines provider traits such as:
 
 ```rust
 AesBlockCipher<K>
@@ -80,366 +83,122 @@ AesCmac<K>
 AesCmacKeyDerivation<K>
 ```
 
-The key type `K` is provider-specific.
-
-A software provider can therefore operate on raw key material:
-
-```text
-KBPK -> &[u8]
-KBEK -> Vec<u8>
-KBAK -> Vec<u8>
-```
-
-while a future HSM provider may instead use opaque key objects:
-
-```text
-KBPK -> HsmKeyHandle
-KBEK -> HsmKeyHandle
-KBAK -> HsmKeyHandle
-```
-
-This allows the payment-standard implementation to remain independent of a
-particular AES library, HSM vendor, or key-storage model.
+The key type is provider-specific. Software providers can operate on raw key
+material, while the abstraction leaves room for providers using opaque or
+non-exportable key handles.
 
 Two software providers are currently included:
 
-* `SoftAesProvider`
 * `RustCryptoProvider`
+* `SoftAesProvider`
 
-Both are exercised against the same TR-31 and ISO 9564 format 4 test vectors to
-verify provider-independent behavior.
-
-No HSM provider is currently included in this repository.
+No HSM-backed provider is currently included.
 
 ## Installation
 
-The `paysec` workspace is published on crates.io as a set of focused crates.
-
-For the main facade crate:
+For the facade crate:
 
 ```toml
 [dependencies]
-paysec = "0.2"
+paysec = "0.3"
 ```
 
-Cryptographic operations use a provider implementation. For example, to use
-the RustCrypto-based provider:
+Cryptographic operations also require a provider. For example:
 
 ```toml
 [dependencies]
-paysec = "0.2"
-paysec-crypto-rustcrypto = "0.2"
+paysec = "0.3"
+paysec-crypto = "0.2.1"
+paysec-crypto-rustcrypto = "0.2.1"
 ```
 
-The `soft-aes` provider is also available:
+Applications can also depend directly on individual crates:
 
 ```toml
 [dependencies]
-paysec = "0.2"
-paysec-crypto-soft-aes = "0.2"
+paysec-dukpt = "0.1"
+paysec-keyblock = "0.2.1"
+paysec-pinblock = "0.2.1"
+paysec-crypto = "0.2.1"
+paysec-crypto-rustcrypto = "0.2.1"
 ```
 
-Applications that do not need the facade crate can depend directly on the
-individual workspace crates:
+See the individual crate READMEs for detailed usage examples.
 
-```toml
-[dependencies]
-paysec-pinblock = "0.2"
-paysec-keyblock = "0.2"
-paysec-crypto = "0.2"
-paysec-crypto-rustcrypto = "0.2"
-```
-
-The provider abstraction is designed so that cryptographic backends can use
-different key representations. The included software providers operate on raw
-key material, while future providers can use opaque key handles such as those
-provided by an HSM.
-
-## ISO 9564 Format 4 Example
-
-The following example enciphers and then deciphers an ISO 9564 format 4 PIN
-block using the RustCrypto provider:
-
-```rust
-use paysec::pinblock::{
-    decipher_pinblock_iso_4,
-    encipher_pinblock_iso_4,
-};
-use paysec_crypto_rustcrypto::RustCryptoProvider;
-
-let provider = RustCryptoProvider::new();
-
-let key = hex::decode(
-    "00112233445566778899AABBCCDDEEFF",
-)
-.unwrap();
-
-let pin = "1234";
-let pan = "1234567890123456789";
-let random_seed = vec![0xFF; 8];
-
-let pin_block = encipher_pinblock_iso_4(
-    &provider,
-    key.as_slice(),
-    pin,
-    pan,
-    random_seed,
-)
-.unwrap();
-
-assert_eq!(
-    hex::encode_upper(&pin_block),
-    "28B41FDDD29B743E93124BD8E32D921E"
-);
-
-let recovered_pin = decipher_pinblock_iso_4(
-    &provider,
-    key.as_slice(),
-    &pin_block,
-    pan,
-)
-.unwrap();
-
-assert_eq!(
-    recovered_pin.expose_secret(),
-    pin,
-);
-```
-
-Decoded plaintext PINs are returned as `Pin` rather than ordinary `String`
-values. See [Sensitive Data Handling](#sensitive-data-handling).
-
-## TR-31 Example
-
-The following example wraps and unwraps a key using TR-31 version `D`:
-
-```rust
-use paysec::keyblock::{
-    tr31_unwrap,
-    tr31_wrap,
-    KeyBlockHeader,
-};
-use paysec_crypto::AesKeySize;
-use paysec_crypto_rustcrypto::RustCryptoProvider;
-
-let provider = RustCryptoProvider::new();
-
-let header = KeyBlockHeader::new_with_values(
-    "D",
-    "P0",
-    "A",
-    "E",
-    "00",
-    "E",
-)
-.unwrap();
-
-let key = hex::decode(
-    "3F419E1CB7079442AA37474C2EFBF8B8",
-)
-.unwrap();
-
-let random_seed = hex::decode(
-    "1C2965473CE206BB855B01533782",
-)
-.unwrap();
-
-let kbpk = hex::decode(
-    "88E1AB2A2E3DD38C1FA039A536500CC8A87AB9D62DC92C01058FA79F44657DE6",
-)
-.unwrap();
-
-let key_block = tr31_wrap(
-    &provider,
-    kbpk.as_slice(),
-    AesKeySize::Bits256,
-    header,
-    &key,
-    0,
-    &random_seed,
-)
-.unwrap();
-
-let (header, recovered_key) = tr31_unwrap(
-    &provider,
-    kbpk.as_slice(),
-    AesKeySize::Bits256,
-    &key_block,
-)
-.unwrap();
-
-assert_eq!(header.version_id(), "D");
-
-assert_eq!(
-    recovered_key.expose_secret(),
-    key.as_slice(),
-);
-```
-
-The KBPK representation is provider-specific. A software provider uses raw key
-bytes, while an HSM-backed provider could use an opaque key handle without
-exposing the KBPK, KBEK, or KBAK to the payment-standard implementation.
-
-## Sensitive Data Handling
-
-`paysec` uses dedicated types for plaintext sensitive values created by the
-library.
-
-### `Pin`
-
-Decoded or deciphered plaintext PINs are returned as `Pin`.
-
-`Pin`:
-
-* validates that the value contains 4 to 12 ASCII decimal digits,
-* redacts its contents from `Debug`,
-* zeroizes its owned memory when dropped,
-* requires explicit access through `expose_secret()`.
-
-For example:
-
-```rust
-let pin = recovered_pin.expose_secret();
-```
-
-### `SecretKey`
-
-Plaintext key material returned by TR-31 unwrapping is returned as `SecretKey`.
-
-`SecretKey`:
-
-* redacts its contents from `Debug`,
-* zeroizes its owned memory when dropped,
-* requires explicit access through `expose_secret()`.
-
-Temporary plaintext payload and PIN-field buffers used internally in sensitive
-processing paths are also zeroized where practical.
-
-These measures provide defense in depth against accidental disclosure and
-residual process-memory contents. They do **not** guarantee that secrets have
-never existed elsewhere in memory. Callers may retain their own copies, and
-operating-system facilities such as swap, crash dumps, or process-memory
-inspection are outside the scope of these protections.
-
-## Security Considerations
-
-The security properties of cryptographic operations depend on the selected
-provider and deployment environment.
+## Security
 
 The software providers included in this repository operate on key material in
-application memory. They are useful for:
+application memory. They are suitable for development, interoperability work,
+standard test vectors, and environments where software-managed keys are
+appropriate.
 
-* testing,
-* interoperability work,
-* deterministic standard test vectors,
-* development,
-* software-only applications where that security model is appropriate.
+They do not provide the isolation or non-exportability guarantees of a
+Hardware Security Module.
 
-They do not provide the isolation or non-exportability guarantees of a Hardware
-Security Module.
+The payment-standard crates use dedicated secret types where appropriate.
+These types redact secret values from debug output and zeroize owned secret
+memory when dropped.
 
-The provider abstraction is designed so that applications requiring stronger
-key protection can use an implementation based on opaque key handles without
-requiring the payment-standard logic to access raw provider-managed key
-material.
+These protections are defense in depth and do not guarantee that secret values
+have never existed elsewhere in process memory.
 
-### Randomness
-
-Some operations, including TR-31 wrapping and ISO 9564 format 4 PIN field
-construction, require random data.
-
-`paysec` deliberately accepts this data from the caller rather than selecting a
-random-number generator internally. This makes deterministic standard vectors
-and reproducible testing possible and leaves entropy generation under
-application or provider control.
-
-The library does not assess the entropy quality of supplied random data.
-
-Production applications are responsible for providing randomness appropriate
-for their security requirements.
-
-### Compliance
+Some operations require caller-provided random data. The library deliberately
+does not select a random-number generator internally, allowing deterministic
+standard vectors and leaving entropy generation under application or provider
+control.
 
 Using this library does not by itself establish compliance with PCI, ANSI, ISO,
-or other payment-security requirements.
-
-Production deployments may require additional controls including:
-
-* certified HSMs,
-* secure key ceremonies,
-* access control,
-* audit logging,
-* secure entropy sources,
-* key lifecycle management,
-* process and host hardening,
-* certification or validation against applicable standards.
-
-Users are responsible for determining which requirements apply to their
-environment.
-
-## Error Handling
-
-The payment-standard crates use typed errors.
-
-Protocol, parsing, and validation failures are kept separate from errors
-reported by cryptographic providers.
-
-For provider-backed operations, APIs use generic error types such as:
-
-```rust
-PinBlockCryptoError<E>
-Tr31CryptoError<E>
-```
-
-where `E` is the concrete error type of the selected cryptographic provider.
-
-This allows provider-specific errors—including errors from a future HSM
-integration—to remain available without converting them to strings or erasing
-their concrete type.
+or other payment-security requirements. Production environments may require
+additional controls such as certified HSMs, access control, audit logging,
+secure key ceremonies, key lifecycle management, and platform hardening.
 
 ## Development
 
-The workspace currently targets:
+The workspace targets:
 
 ```text
 Rust edition: 2024
 MSRV:         1.89
 ```
 
-Run the complete test suite with:
-
-```bash
-cargo test --workspace
-```
-
-Run documentation tests with:
-
-```bash
-cargo test --workspace --doc
-```
-
-Check the complete workspace with:
+Check the complete workspace:
 
 ```bash
 cargo check --workspace
 ```
 
-Both software cryptographic providers are tested against the same
-payment-standard vectors.
+Run the test suite:
 
-## API Documentation
+```bash
+cargo test --workspace
+```
 
-The source contains Rustdoc documentation for the public APIs and major
-standards implementations, including executable examples.
+Run documentation tests:
 
-After publication, crate documentation is available through
-[docs.rs](https://docs.rs/).
+```bash
+cargo test --workspace --doc
+```
 
-Documentation can also be generated locally:
+Generate API documentation locally:
 
 ```bash
 cargo doc --workspace --no-deps --open
 ```
+
+## Documentation
+
+Detailed documentation is available in the individual crate READMEs:
+
+* [`paysec`](crates/paysec/README.md)
+* [`paysec-dukpt`](crates/paysec-dukpt/README.md)
+* [`paysec-keyblock`](crates/paysec-keyblock/README.md)
+* [`paysec-pinblock`](crates/paysec-pinblock/README.md)
+* [`paysec-crypto`](crates/paysec-crypto/README.md)
+* [`paysec-crypto-rustcrypto`](crates/paysec-crypto-rustcrypto/README.md)
+* [`paysec-crypto-soft-aes`](crates/paysec-crypto-soft-aes/README.md)
+
+Published API documentation is available through
+[docs.rs](https://docs.rs/).
 
 ## Related Projects
 
@@ -449,8 +208,6 @@ The [PIN Block Web Tool](https://www.jointech.at/tools/pinblock/index.html)
 provides a browser-based interface for generating and inspecting ISO 9564 PIN
 block test data.
 
-It demonstrates use of `paysec` through WebAssembly.
-
 ### Key Block Web Tool
 
 The [Key Block Web Tool](https://www.jointech.at/tools/keyblock/index.html)
@@ -459,16 +216,16 @@ generation.
 
 ## Possible Future Work
 
-Possible future development areas include:
+Possible future areas include:
 
-* HSM-backed cryptographic providers,
-* TR-34 asymmetric key distribution,
-* ANSI X9.143 and ISO 20038 related key-block extensions,
-* additional TR-31 key block versions,
-* additional PIN block formats,
-* additional payment cryptography and key-management functionality.
+* HSM-backed cryptographic providers
+* TR-34 asymmetric key distribution
+* ANSI X9.143 and ISO 20038 key-block extensions
+* additional TR-31 key block versions
+* additional PIN block formats
+* additional payment cryptography and key-management functionality
 
-These items describe possible areas of development rather than committed release plans.
+These are possible areas of development rather than committed release plans.
 
 ## License
 
@@ -484,8 +241,8 @@ intellectual-property rights belong to their respective standards
 organizations. Users are responsible for obtaining any standards documents or
 licenses required for their use case.
 
-Dependencies used by the project are distributed under their own licenses and
-should be reviewed independently where required.
+Dependencies are distributed under their own licenses and should be reviewed
+independently where required.
 
 For questions about alternative licensing arrangements, contact David Schmid at
 `david.schmid@mailbox.org`.

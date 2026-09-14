@@ -1,6 +1,6 @@
 [package]
 name = "paysec-crypto"
-version.workspace = true
+version = "0.2.1"
 edition.workspace = true
 rust-version.workspace = true
 authors.workspace = true
@@ -9,6 +9,7 @@ repository.workspace = true
 
 description = "Cryptographic provider interfaces for the paysec payment security libraries."
 documentation = "https://docs.rs/paysec-crypto"
+readme = "README.md"
 keywords = [
     "payments",
     "payment-security",

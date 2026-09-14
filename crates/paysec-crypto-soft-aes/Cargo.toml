@@ -1,6 +1,6 @@
 [package]
 name = "paysec-crypto-soft-aes"
-version.workspace = true
+version = "0.2.1"
 edition.workspace = true
 rust-version.workspace = true
 authors.workspace = true
@@ -9,6 +9,7 @@ repository.workspace = true
 
 description = "Software AES cryptographic provider for paysec based on soft-aes."
 documentation = "https://docs.rs/paysec-crypto-soft-aes"
+readme = "README.md"
 keywords = [
     "payments",
     "cryptography",

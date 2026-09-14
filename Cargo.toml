@@ -11,7 +11,6 @@ members = [
 resolver = "3"
 
 [workspace.package]
-version = "0.2.0"
 edition = "2024"
 rust-version = "1.89"
 authors = ["David Schmid <david.schmid@mailbox.org>"]
@@ -28,32 +27,9 @@ cmac = "0.8.0"
 
 zeroize = "1.9.0"
 
-paysec-crypto = {
-version = "0.2.0",
-path = "crates/paysec-crypto",
-}
-
-paysec-crypto-soft-aes = {
-version = "0.2.0",
-path = "crates/paysec-crypto-soft-aes",
-}
-
-paysec-crypto-rustcrypto = {
-version = "0.2.0",
-path = "crates/paysec-crypto-rustcrypto",
-}
-
-paysec-pinblock = {
-version = "0.2.0",
-path = "crates/paysec-pinblock",
-}
-
-paysec-keyblock = {
-version = "0.2.0",
-path = "crates/paysec-keyblock",
-}
-
-paysec-dukpt = {
-    version = "0.2.0",
-    path = "crates/paysec-dukpt",
-}
+paysec-crypto = { version = "0.2.1", path = "crates/paysec-crypto" }
+paysec-crypto-soft-aes = { version = "0.2.1", path = "crates/paysec-crypto-soft-aes" }
+paysec-crypto-rustcrypto = { version = "0.2.1", path = "crates/paysec-crypto-rustcrypto" }
+paysec-pinblock = { version = "0.2.1", path = "crates/paysec-pinblock" }
+paysec-keyblock = { version = "0.2.1", path = "crates/paysec-keyblock" }
+paysec-dukpt = { version = "0.1.0", path = "crates/paysec-dukpt" }
