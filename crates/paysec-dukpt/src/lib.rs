@@ -5,9 +5,11 @@
 mod derivation;
 mod error;
 mod initial_key_id;
+mod key_usage;
 mod secret;
 
-pub use derivation::derive_initial_key;
+pub use derivation::{derive_initial_key, derive_working_key};
 pub use error::DukptError;
 pub use initial_key_id::InitialKeyId;
+pub use key_usage::WorkingKeyUsage;
 pub use secret::DukptKey;
