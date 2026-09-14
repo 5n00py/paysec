@@ -1,0 +1,28 @@
+[package]
+name = "paysec-dukpt"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+
+description = "AES DUKPT key derivation for payment security applications."
+documentation = "https://docs.rs/paysec-dukpt"
+keywords = [
+    "payments",
+    "payment-security",
+    "dukpt",
+    "aes",
+    "cryptography",
+]
+categories = ["cryptography"]
+
+[dependencies]
+paysec-crypto.workspace = true
+zeroize.workspace = true
+
+[dev-dependencies]
+hex.workspace = true
+paysec-crypto-rustcrypto.workspace = true
+paysec-crypto-soft-aes.workspace = true

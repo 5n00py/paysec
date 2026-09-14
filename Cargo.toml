@@ -6,6 +6,7 @@ members = [
     "crates/paysec-crypto-rustcrypto",
     "crates/paysec-pinblock",
     "crates/paysec-keyblock",
+	"crates/paysec-dukpt",
 ]
 resolver = "3"
 
@@ -50,4 +51,9 @@ path = "crates/paysec-pinblock",
 paysec-keyblock = {
 version = "0.2.0",
 path = "crates/paysec-keyblock",
+}
+
+paysec-dukpt = {
+    version = "0.2.0",
+    path = "crates/paysec-dukpt",
 }
