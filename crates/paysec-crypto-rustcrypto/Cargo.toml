@@ -1,6 +1,6 @@
 [package]
 name = "paysec-crypto-rustcrypto"
-version = "0.2.2"
+version = "0.3.0"
 edition.workspace = true
 rust-version.workspace = true
 authors.workspace = true
@@ -23,6 +23,9 @@ aes.workspace = true
 cbc.workspace = true
 cmac.workspace = true
 paysec-crypto.workspace = true
+rsa.workspace = true
+sha2.workspace = true
+rand_core.workspace = true
 
 [dev-dependencies]
 hex.workspace = true

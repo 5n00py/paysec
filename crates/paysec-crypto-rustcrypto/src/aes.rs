@@ -7,7 +7,7 @@ use cmac::{Cmac, Mac};
 
 use paysec_crypto::{AesBlockCipher, AesCbc, AesCmac, AesCmacKeyDerivation};
 
-use crate::{RustCryptoError, RustCryptoProvider};
+use crate::{RustCryptoError, RustCryptoProvider, RustCryptoProviderWithRng};
 
 const AES_BLOCK_SIZE: usize = 16;
 
@@ -290,6 +290,97 @@ impl AesCmac<Vec<u8>> for RustCryptoProvider {
         message: &[u8],
     ) -> Result<[u8; AES_BLOCK_SIZE], Self::Error> {
         <Self as AesCmac<[u8]>>::calculate_cmac(self, key.as_slice(), message)
+    }
+}
+
+impl<R> AesBlockCipher<[u8]> for RustCryptoProviderWithRng<R> {
+    fn encrypt_block(
+        &self,
+        key: &[u8],
+        block: &[u8; AES_BLOCK_SIZE],
+    ) -> Result<[u8; AES_BLOCK_SIZE], Self::Error> {
+        RustCryptoProvider::new().encrypt_block(key, block)
+    }
+
+    fn decrypt_block(
+        &self,
+        key: &[u8],
+        block: &[u8; AES_BLOCK_SIZE],
+    ) -> Result<[u8; AES_BLOCK_SIZE], Self::Error> {
+        RustCryptoProvider::new().decrypt_block(key, block)
+    }
+}
+
+impl<R> AesCbc<[u8]> for RustCryptoProviderWithRng<R> {
+    fn encrypt_cbc(
+        &self,
+        key: &[u8],
+        iv: &[u8; AES_BLOCK_SIZE],
+        plaintext: &[u8],
+    ) -> Result<Vec<u8>, Self::Error> {
+        RustCryptoProvider::new().encrypt_cbc(key, iv, plaintext)
+    }
+
+    fn decrypt_cbc(
+        &self,
+        key: &[u8],
+        iv: &[u8; AES_BLOCK_SIZE],
+        ciphertext: &[u8],
+    ) -> Result<Vec<u8>, Self::Error> {
+        RustCryptoProvider::new().decrypt_cbc(key, iv, ciphertext)
+    }
+}
+
+impl<R> AesCmac<[u8]> for RustCryptoProviderWithRng<R> {
+    fn calculate_cmac(
+        &self,
+        key: &[u8],
+        message: &[u8],
+    ) -> Result<[u8; AES_BLOCK_SIZE], Self::Error> {
+        RustCryptoProvider::new().calculate_cmac(key, message)
+    }
+}
+
+impl<R> AesCmacKeyDerivation<[u8]> for RustCryptoProviderWithRng<R> {
+    type DerivedKey = Vec<u8>;
+
+    fn derive_key_cmac(
+        &self,
+        key: &[u8],
+        derivation_inputs: &[&[u8]],
+        output_len: usize,
+    ) -> Result<Self::DerivedKey, Self::Error> {
+        RustCryptoProvider::new().derive_key_cmac(key, derivation_inputs, output_len)
+    }
+}
+
+impl<R> AesCbc<Vec<u8>> for RustCryptoProviderWithRng<R> {
+    fn encrypt_cbc(
+        &self,
+        key: &Vec<u8>,
+        iv: &[u8; AES_BLOCK_SIZE],
+        plaintext: &[u8],
+    ) -> Result<Vec<u8>, Self::Error> {
+        RustCryptoProvider::new().encrypt_cbc(key, iv, plaintext)
+    }
+
+    fn decrypt_cbc(
+        &self,
+        key: &Vec<u8>,
+        iv: &[u8; AES_BLOCK_SIZE],
+        ciphertext: &[u8],
+    ) -> Result<Vec<u8>, Self::Error> {
+        RustCryptoProvider::new().decrypt_cbc(key, iv, ciphertext)
+    }
+}
+
+impl<R> AesCmac<Vec<u8>> for RustCryptoProviderWithRng<R> {
+    fn calculate_cmac(
+        &self,
+        key: &Vec<u8>,
+        message: &[u8],
+    ) -> Result<[u8; AES_BLOCK_SIZE], Self::Error> {
+        RustCryptoProvider::new().calculate_cmac(key, message)
     }
 }
 
