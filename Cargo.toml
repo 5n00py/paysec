@@ -27,7 +27,7 @@ cmac = "0.8.0"
 
 zeroize = "1.9.0"
 
-paysec-crypto = { version = "0.2.1", path = "crates/paysec-crypto" }
+paysec-crypto = { version = "0.3.0", path = "crates/paysec-crypto" }
 paysec-crypto-soft-aes = { version = "0.2.1", path = "crates/paysec-crypto-soft-aes" }
 paysec-crypto-rustcrypto = { version = "0.2.1", path = "crates/paysec-crypto-rustcrypto" }
 paysec-pinblock = { version = "0.2.1", path = "crates/paysec-pinblock" }
