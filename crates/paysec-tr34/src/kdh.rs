@@ -26,6 +26,50 @@ use crate::asn1::signer_info::build_signer_info;
 const AES_128_KEY_LENGTH: usize = 16;
 const AES_CBC_IV_LENGTH: usize = 16;
 
+/// Parameters for a two-pass TR-34 key export operation.
+///
+/// The cryptographic key handles are supplied separately to
+/// [`export_key_two_pass`] because their concrete representation belongs
+/// to the crypto provider rather than the TR-34 protocol layer.
+///
+/// The request fields are intentionally private so that additional TR-34
+/// profile or compatibility options can be introduced later without
+/// exposing the internal representation as part of the public API.
+pub struct TwoPassKeyExport<'a> {
+    kdh_credential: &'a KdhCredential,
+    krd_credential: &'a KrdCredential,
+    clear_key: &'a [u8],
+    key_block_header: &'a [u8],
+    random_nonce: &'a [u8],
+    kdh_crl: &'a KdhCrl,
+}
+
+impl<'a> TwoPassKeyExport<'a> {
+    /// Construct a strict two-pass TR-34 key export request.
+    ///
+    /// `random_nonce` is the nonce received from the KRD for this
+    /// transaction.
+    ///
+    /// `kdh_crl` is required by the strict TR-34 export path.
+    pub fn new(
+        kdh_credential: &'a KdhCredential,
+        krd_credential: &'a KrdCredential,
+        clear_key: &'a [u8],
+        key_block_header: &'a [u8],
+        random_nonce: &'a [u8],
+        kdh_crl: &'a KdhCrl,
+    ) -> Self {
+        Self {
+            kdh_credential,
+            krd_credential,
+            clear_key,
+            key_block_header,
+            random_nonce,
+            kdh_crl,
+        }
+    }
+}
+
 /// Construct the encrypted inner TR-34 key block.
 ///
 /// This function performs the KDH-side cryptographic operations required to
@@ -177,6 +221,45 @@ where
         signed_attributes,
         &signature,
     )?)
+}
+
+/// Export a key using the strict two-pass TR-34 key transport profile.
+///
+/// The returned byte vector is the complete DER-encoded CMS ContentInfo
+/// containing the TR-34 KDH key token.
+///
+/// `krd_public_key` is the provider-specific public encryption-key handle
+/// corresponding to the KRD credential.
+///
+/// `kdh_signing_key` is the provider-specific private signing-key handle
+/// corresponding to the KDH credential.
+pub fn export_key_two_pass<P, KrdKey, KdhKey>(
+    provider: &mut P,
+    request: TwoPassKeyExport<'_>,
+    krd_public_key: &KrdKey,
+    kdh_signing_key: &KdhKey,
+) -> Result<Vec<u8>, Tr34CryptoError<<P as CryptoProvider>::Error>>
+where
+    P: RandomBytes + AesCbc<[u8]> + RsaOaepSha256Encrypt<KrdKey> + RsaPkcs1v15Sha256Sign<KdhKey>,
+    KrdKey: ?Sized,
+    KdhKey: ?Sized,
+{
+    let content_info = build_two_pass_key_token(
+        provider,
+        request.kdh_credential,
+        request.krd_credential,
+        krd_public_key,
+        kdh_signing_key,
+        request.clear_key,
+        request.key_block_header,
+        request.random_nonce,
+        request.kdh_crl,
+    )?;
+
+    content_info
+        .to_der()
+        .map_err(Tr34Error::from)
+        .map_err(Tr34CryptoError::Tr34)
 }
 
 #[cfg(test)]

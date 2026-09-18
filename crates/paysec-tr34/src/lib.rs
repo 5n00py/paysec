@@ -10,3 +10,4 @@ pub use credential::{KdhCredential, KrdCredential};
 pub use crl::KdhCrl;
 
 pub use error::{Tr34CryptoError, Tr34Error};
+pub use kdh::{TwoPassKeyExport, export_key_two_pass};
