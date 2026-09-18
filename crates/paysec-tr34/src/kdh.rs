@@ -1,10 +1,19 @@
 use cms::enveloped_data::EnvelopedData;
+use cms::signed_data::SignerInfo;
 
-use paysec_crypto::{AesCbc, CryptoProvider, RandomBytes, RsaOaepSha256Encrypt};
+use paysec_crypto::{
+    AesCbc, CryptoProvider, RandomBytes, RsaOaepSha256Encrypt, RsaPkcs1v15Sha256Sign,
+};
 
 use zeroize::Zeroizing;
 
 use crate::asn1::enveloped_data::{build_enveloped_data, encode_padded_key_block};
+
+use crate::asn1::signed_attributes::{
+    build_two_pass_signed_attributes, signed_attributes_signing_der,
+};
+
+use crate::asn1::signer_info::build_signer_info;
 
 use crate::{KdhCredential, KrdCredential, Tr34CryptoError};
 
@@ -72,23 +81,68 @@ where
     )?)
 }
 
+/// Construct the CMS SignerInfo for a two-pass TR-34 key token.
+///
+/// `encapsulated_content` must be the exact DER bytes that will be placed
+/// in the outer SignedData `eContent`.
+///
+/// This function:
+///
+/// 1. Constructs the two-pass SignedAttributes.
+/// 2. Encodes the exact canonical DER bytes covered by the signature.
+/// 3. Signs those bytes using RSA PKCS#1 v1.5 with SHA-256.
+/// 4. Constructs the CMS SignerInfo.
+///
+/// The KDH signing key is supplied separately from `KdhCredential` so the
+/// TR-34 layer remains independent of the provider's private-key
+/// representation.
+pub(crate) fn build_two_pass_signer_info<P, K>(
+    provider: &P,
+    kdh_credential: &KdhCredential,
+    kdh_signing_key: &K,
+    encapsulated_content: &[u8],
+    random_nonce: &[u8],
+    key_block_header: &[u8],
+) -> Result<SignerInfo, Tr34CryptoError<<P as CryptoProvider>::Error>>
+where
+    P: RsaPkcs1v15Sha256Sign<K>,
+    K: ?Sized,
+{
+    let signed_attributes =
+        build_two_pass_signed_attributes(encapsulated_content, random_nonce, key_block_header)?;
+
+    let signing_der = signed_attributes_signing_der(&signed_attributes)?;
+
+    let signature = provider
+        .sign_pkcs1v15_sha256(kdh_signing_key, &signing_der)
+        .map_err(Tr34CryptoError::Crypto)?;
+
+    Ok(build_signer_info(
+        kdh_credential,
+        signed_attributes,
+        &signature,
+    )?)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
     use der::Encode;
 
-    use paysec_crypto_rustcrypto::{RsaPublicKey, RustCryptoProvider};
-
+    use paysec_crypto_rustcrypto::{RsaPrivateKey, RsaPublicKey, RustCryptoProvider};
     use rand_core::{CryptoRng, Error as RandError, RngCore};
 
-    use rsa::pkcs8::DecodePublicKey;
-
     use crate::asn1::enveloped_data::aes_128_cbc_algorithm_identifier;
+    use paysec_crypto::RsaPkcs1v15Sha256Verify;
+
+    use rsa::pkcs8::{DecodePrivateKey, DecodePublicKey};
 
     const KDH_CERTIFICATE_DER: &[u8] = include_bytes!("../tests/fixtures/kdh-certificate.der");
 
     const KRD_CERTIFICATE_DER: &[u8] = include_bytes!("../tests/fixtures/krd-certificate.der");
+
+    const KDH_PRIVATE_KEY_DER: &[u8] = include_bytes!("../tests/fixtures/kdh-private-key.der");
 
     struct FixedRng {
         bytes: Vec<u8>,
@@ -158,6 +212,21 @@ mod tests {
         bytes.extend_from_slice(&oaep_seed);
 
         FixedRng::new(bytes)
+    }
+
+    fn kdh_private_key() -> RsaPrivateKey {
+        RsaPrivateKey::from_pkcs8_der(KDH_PRIVATE_KEY_DER).unwrap()
+    }
+
+    fn kdh_public_key(credential: &KdhCredential) -> RsaPublicKey {
+        let spki = credential
+            .certificate()
+            .tbs_certificate
+            .subject_public_key_info
+            .to_der()
+            .unwrap();
+
+        RsaPublicKey::from_public_key_der(&spki).unwrap()
     }
 
     #[test]
@@ -256,5 +325,104 @@ mod tests {
         .unwrap();
 
         assert_eq!(enveloped_a.to_der().unwrap(), enveloped_b.to_der().unwrap());
+    }
+
+    #[test]
+    fn signs_two_pass_attributes_with_kdh_private_key() {
+        let kdh_credential = KdhCredential::from_der(KDH_CERTIFICATE_DER).unwrap();
+
+        let krd_credential = KrdCredential::from_der(KRD_CERTIFICATE_DER).unwrap();
+
+        let krd_public_key = krd_public_key(&krd_credential);
+
+        let kdh_private_key = kdh_private_key();
+
+        let kdh_public_key = kdh_public_key(&kdh_credential);
+
+        let clear_key = hex::decode("0123456789ABCDEFFEDCBA9876543210").unwrap();
+
+        let random_nonce = hex::decode("167EB0E72781E4940112233445566778").unwrap();
+
+        let key_block_header = b"A0256K0TB00E0000";
+
+        let mut provider = RustCryptoProvider::with_rng(deterministic_rng());
+
+        let enveloped_data = build_enveloped_key_block(
+            &mut provider,
+            &kdh_credential,
+            &krd_credential,
+            &krd_public_key,
+            &clear_key,
+            key_block_header,
+        )
+        .unwrap();
+
+        // These are the exact bytes that will later become the outer
+        // SignedData eContent.
+        let encapsulated_content = enveloped_data.to_der().unwrap();
+
+        let signer_info = build_two_pass_signer_info(
+            &provider,
+            &kdh_credential,
+            &kdh_private_key,
+            &encapsulated_content,
+            &random_nonce,
+            key_block_header,
+        )
+        .unwrap();
+
+        let signed_attributes = signer_info.signed_attrs.as_ref().unwrap();
+
+        let signing_der = signed_attributes_signing_der(signed_attributes).unwrap();
+
+        provider
+            .verify_pkcs1v15_sha256(
+                &kdh_public_key,
+                &signing_der,
+                signer_info.signature.as_bytes(),
+            )
+            .unwrap();
+    }
+
+    #[test]
+    fn two_pass_signature_binds_exact_encapsulated_content() {
+        let kdh_credential = KdhCredential::from_der(KDH_CERTIFICATE_DER).unwrap();
+
+        let kdh_private_key = kdh_private_key();
+
+        let kdh_public_key = kdh_public_key(&kdh_credential);
+
+        let random_nonce = hex::decode("167EB0E72781E4940112233445566778").unwrap();
+
+        let key_block_header = b"A0256K0TB00E0000";
+
+        let provider = RustCryptoProvider::new();
+
+        let signer_info = build_two_pass_signer_info(
+            &provider,
+            &kdh_credential,
+            &kdh_private_key,
+            b"original encapsulated content",
+            &random_nonce,
+            key_block_header,
+        )
+        .unwrap();
+
+        let modified_attributes = build_two_pass_signed_attributes(
+            b"modified encapsulated content",
+            &random_nonce,
+            key_block_header,
+        )
+        .unwrap();
+
+        let modified_signing_der = signed_attributes_signing_der(&modified_attributes).unwrap();
+
+        let result = provider.verify_pkcs1v15_sha256(
+            &kdh_public_key,
+            &modified_signing_der,
+            signer_info.signature.as_bytes(),
+        );
+
+        assert!(result.is_err());
     }
 }
