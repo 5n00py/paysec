@@ -7,6 +7,7 @@ members = [
     "crates/paysec-pinblock",
     "crates/paysec-keyblock",
 	"crates/paysec-dukpt",
+    "crates/paysec-tr34"
 ]
 resolver = "3"
 
@@ -31,9 +32,13 @@ rsa = { version = "0.9.10", features = ["sha2"] }
 sha2 = { version = "0.10.9", features = ["oid"] }
 rand_core = { version = "0.6.4", features = ["getrandom"] }
 
+cms = { version = "0.2.3", default-features = false, features = ["alloc", "std"] }
+der = { version = "0.7", features = ["alloc", "derive", "std"] }
+
 paysec-crypto = { version = "0.3.0", path = "crates/paysec-crypto" }
 paysec-crypto-soft-aes = { version = "0.2.1", path = "crates/paysec-crypto-soft-aes" }
 paysec-crypto-rustcrypto = { version = "0.3.0", path = "crates/paysec-crypto-rustcrypto" }
 paysec-pinblock = { version = "0.2.1", path = "crates/paysec-pinblock" }
 paysec-keyblock = { version = "0.2.1", path = "crates/paysec-keyblock" }
 paysec-dukpt = { version = "0.1.0", path = "crates/paysec-dukpt" }
+paysec-tr34 = { version = "0.1.0", path = "crates/paysec-tr34" }

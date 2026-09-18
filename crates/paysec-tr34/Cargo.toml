@@ -1,0 +1,28 @@
+[package]
+name = "paysec-tr34"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+
+description = "TR-34 processing for payment security applications."
+documentation = "https://docs.rs/paysec-tr34"
+readme = "README.md"
+keywords = [
+    "payments",
+    "payment-security",
+    "key-block",
+    "tr34",
+    "cryptography",
+]
+categories = ["cryptography"]
+
+[dependencies]
+cms.workspace = true
+der.workspace = true
+zeroize.workspace = true
+
+[dev-dependencies]
+hex.workspace = true
