@@ -14,6 +14,7 @@ fn parse_certificate(input: &[u8]) -> Result<Certificate, Tr34Error> {
 fn issuer_and_serial_number(certificate: &Certificate) -> IssuerAndSerialNumber {
     IssuerAndSerialNumber {
         issuer: certificate.tbs_certificate.issuer.clone(),
+
         serial_number: certificate.tbs_certificate.serial_number.clone(),
     }
 }
@@ -34,21 +35,6 @@ impl KdhCredential {
         Ok(Self {
             certificate: parse_certificate(input)?,
         })
-    }
-
-    /// Construct a KDH credential from an already parsed certificate.
-    pub const fn from_certificate(certificate: Certificate) -> Self {
-        Self { certificate }
-    }
-
-    /// Return the underlying X.509 certificate.
-    pub const fn certificate(&self) -> &Certificate {
-        &self.certificate
-    }
-
-    /// Consume this credential and return the underlying certificate.
-    pub fn into_certificate(self) -> Certificate {
-        self.certificate
     }
 
     pub(crate) fn issuer_and_serial_number(&self) -> IssuerAndSerialNumber {
@@ -72,21 +58,6 @@ impl KrdCredential {
         Ok(Self {
             certificate: parse_certificate(input)?,
         })
-    }
-
-    /// Construct a KRD credential from an already parsed certificate.
-    pub const fn from_certificate(certificate: Certificate) -> Self {
-        Self { certificate }
-    }
-
-    /// Return the underlying X.509 certificate.
-    pub const fn certificate(&self) -> &Certificate {
-        &self.certificate
-    }
-
-    /// Consume this credential and return the underlying certificate.
-    pub fn into_certificate(self) -> Certificate {
-        self.certificate
     }
 
     /// Return the DER-encoded SubjectPublicKeyInfo containing the KRD public
@@ -127,12 +98,12 @@ mod tests {
 
         assert_eq!(
             identifier.issuer,
-            credential.certificate().tbs_certificate.issuer
+            credential.certificate.tbs_certificate.issuer
         );
 
         assert_eq!(
             identifier.serial_number,
-            credential.certificate().tbs_certificate.serial_number
+            credential.certificate.tbs_certificate.serial_number
         );
     }
 
@@ -144,12 +115,12 @@ mod tests {
 
         assert_eq!(
             identifier.issuer,
-            credential.certificate().tbs_certificate.issuer
+            credential.certificate.tbs_certificate.issuer
         );
 
         assert_eq!(
             identifier.serial_number,
-            credential.certificate().tbs_certificate.serial_number
+            credential.certificate.tbs_certificate.serial_number
         );
     }
 
@@ -161,7 +132,7 @@ mod tests {
 
         assert_eq!(
             recipient_identifier,
-            RecipientIdentifier::IssuerAndSerialNumber(credential.issuer_and_serial_number())
+            RecipientIdentifier::IssuerAndSerialNumber(credential.issuer_and_serial_number(),)
         );
     }
 

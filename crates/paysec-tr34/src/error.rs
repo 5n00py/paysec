@@ -1,9 +1,11 @@
 use std::error::Error;
+
 use std::fmt::{Display, Formatter};
 
 /// Errors produced while constructing, parsing, validating, or serializing
 /// TR-34 data.
 #[derive(Debug)]
+#[non_exhaustive]
 pub enum Tr34Error {
     /// ASN.1 DER processing failed.
     Der(der::Error),
@@ -52,6 +54,7 @@ impl From<der::Error> for Tr34Error {
 /// Error returned by TR-34 operations that may invoke a cryptographic
 /// provider.
 #[derive(Debug)]
+#[non_exhaustive]
 pub enum Tr34CryptoError<E> {
     /// TR-34 parsing, validation, formatting, or ASN.1 processing failed.
     Tr34(Tr34Error),
@@ -67,6 +70,7 @@ where
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Tr34(error) => Display::fmt(error, f),
+
             Self::Crypto(error) => Display::fmt(error, f),
         }
     }
@@ -79,6 +83,7 @@ where
     fn source(&self) -> Option<&(dyn Error + 'static)> {
         match self {
             Self::Tr34(error) => Some(error),
+
             Self::Crypto(error) => Some(error),
         }
     }

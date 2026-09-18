@@ -24,21 +24,6 @@ impl KdhCrl {
         Ok(Self { certificate_list })
     }
 
-    /// Construct from an already parsed X.509 certificate revocation list.
-    pub const fn from_certificate_list(certificate_list: CertificateList) -> Self {
-        Self { certificate_list }
-    }
-
-    /// Return the underlying X.509 certificate revocation list.
-    pub const fn certificate_list(&self) -> &CertificateList {
-        &self.certificate_list
-    }
-
-    /// Consume this value and return the underlying CRL.
-    pub fn into_certificate_list(self) -> CertificateList {
-        self.certificate_list
-    }
-
     pub(crate) fn revocation_info_choice(&self) -> RevocationInfoChoice {
         RevocationInfoChoice::Crl(self.certificate_list.clone())
     }
@@ -47,7 +32,12 @@ impl KdhCrl {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use der::Encode;
+
+    use der::{Decode, Encode};
+
+    use x509_cert::Certificate;
+
+    const KDH_CERTIFICATE_DER: &[u8] = include_bytes!("../tests/fixtures/kdh-certificate.der");
 
     const KDH_CRL_DER: &[u8] = include_bytes!("../tests/fixtures/kdh-crl.der");
 
@@ -55,7 +45,7 @@ mod tests {
     fn parses_kdh_crl_from_der() {
         let crl = KdhCrl::from_der(KDH_CRL_DER).unwrap();
 
-        assert_eq!(crl.certificate_list().to_der().unwrap(), KDH_CRL_DER);
+        assert_eq!(crl.certificate_list.to_der().unwrap(), KDH_CRL_DER);
     }
 
     #[test]
@@ -63,5 +53,17 @@ mod tests {
         let result = KdhCrl::from_der(b"not a crl");
 
         assert!(matches!(result, Err(Tr34Error::InvalidCrl(_))));
+    }
+
+    #[test]
+    fn kdh_crl_issuer_matches_kdh_certificate_issuer() {
+        let certificate = Certificate::from_der(KDH_CERTIFICATE_DER).unwrap();
+
+        let crl = KdhCrl::from_der(KDH_CRL_DER).unwrap();
+
+        assert_eq!(
+            crl.certificate_list.tbs_cert_list.issuer,
+            certificate.tbs_certificate.issuer
+        );
     }
 }

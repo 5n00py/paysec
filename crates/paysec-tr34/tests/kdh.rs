@@ -6,7 +6,9 @@ use der::{Decode, Encode};
 
 use paysec_crypto_rustcrypto::{RsaPrivateKey, RsaPublicKey, RustCryptoProvider};
 
-use paysec_tr34::{KdhCredential, KdhCrl, KrdCredential, TwoPassKeyExport, export_key_two_pass};
+use paysec_tr34::{
+    KdhCredential, KdhCrl, KrdCredential, TwoPassKeyExportRequest, export_key_two_pass,
+};
 
 use rand_core::{CryptoRng, Error as RandError, RngCore};
 
@@ -108,7 +110,7 @@ fn exports_two_pass_key_token_through_public_api() {
 
     let random_nonce = hex::decode("167EB0E72781E4940112233445566778").unwrap();
 
-    let request = TwoPassKeyExport::new(
+    let request = TwoPassKeyExportRequest::new(
         &kdh_credential,
         &krd_credential,
         &clear_key,

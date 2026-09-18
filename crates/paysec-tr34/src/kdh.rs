@@ -35,28 +35,29 @@ const AES_CBC_IV_LENGTH: usize = 16;
 /// The request fields are intentionally private so that additional TR-34
 /// profile or compatibility options can be introduced later without
 /// exposing the internal representation as part of the public API.
-pub struct TwoPassKeyExport<'a> {
+pub struct TwoPassKeyExportRequest<'a> {
     kdh_credential: &'a KdhCredential,
     krd_credential: &'a KrdCredential,
     clear_key: &'a [u8],
     key_block_header: &'a [u8],
-    random_nonce: &'a [u8],
+    krd_random_nonce: &'a [u8],
     kdh_crl: &'a KdhCrl,
 }
 
-impl<'a> TwoPassKeyExport<'a> {
+impl<'a> TwoPassKeyExportRequest<'a> {
     /// Construct a strict two-pass TR-34 key export request.
     ///
-    /// `random_nonce` is the nonce received from the KRD for this
-    /// transaction.
+    /// `krd_random_nonce` is the random nonce received from the KRD for
+    /// this transaction.
     ///
-    /// `kdh_crl` is required by the strict TR-34 export path.
+    /// `kdh_crl` is required by the strict TR-34 encoding path.
+    #[must_use]
     pub fn new(
         kdh_credential: &'a KdhCredential,
         krd_credential: &'a KrdCredential,
         clear_key: &'a [u8],
         key_block_header: &'a [u8],
-        random_nonce: &'a [u8],
+        krd_random_nonce: &'a [u8],
         kdh_crl: &'a KdhCrl,
     ) -> Self {
         Self {
@@ -64,7 +65,7 @@ impl<'a> TwoPassKeyExport<'a> {
             krd_credential,
             clear_key,
             key_block_header,
-            random_nonce,
+            krd_random_nonce,
             kdh_crl,
         }
     }
@@ -223,7 +224,7 @@ where
     )?)
 }
 
-/// Export a key using the strict two-pass TR-34 key transport profile.
+/// Export a key using the strict two-pass TR-34 encoding profile.
 ///
 /// The returned byte vector is the complete DER-encoded CMS ContentInfo
 /// containing the TR-34 KDH key token.
@@ -233,9 +234,13 @@ where
 ///
 /// `kdh_signing_key` is the provider-specific private signing-key handle
 /// corresponding to the KDH credential.
+///
+/// This operation does not validate certificate paths, certificate or CRL
+/// freshness, revocation status, key usage, or that the supplied provider
+/// key handles correspond to the supplied credentials.
 pub fn export_key_two_pass<P, KrdKey, KdhKey>(
     provider: &mut P,
-    request: TwoPassKeyExport<'_>,
+    request: TwoPassKeyExportRequest<'_>,
     krd_public_key: &KrdKey,
     kdh_signing_key: &KdhKey,
 ) -> Result<Vec<u8>, Tr34CryptoError<<P as CryptoProvider>::Error>>
@@ -252,7 +257,7 @@ where
         kdh_signing_key,
         request.clear_key,
         request.key_block_header,
-        request.random_nonce,
+        request.krd_random_nonce,
         request.kdh_crl,
     )?;
 
@@ -351,9 +356,10 @@ mod tests {
         RsaPrivateKey::from_pkcs8_der(KDH_PRIVATE_KEY_DER).unwrap()
     }
 
-    fn kdh_public_key(credential: &KdhCredential) -> RsaPublicKey {
-        let spki = credential
-            .certificate()
+    fn kdh_public_key() -> RsaPublicKey {
+        let certificate = x509_cert::Certificate::from_der(KDH_CERTIFICATE_DER).unwrap();
+
+        let spki = certificate
             .tbs_certificate
             .subject_public_key_info
             .to_der()
@@ -534,7 +540,7 @@ mod tests {
 
         let kdh_private_key = kdh_private_key();
 
-        let kdh_public_key = kdh_public_key(&kdh_credential);
+        let kdh_public_key = kdh_public_key();
 
         let clear_key = hex::decode("0123456789ABCDEFFEDCBA9876543210").unwrap();
 
@@ -586,7 +592,7 @@ mod tests {
 
         let kdh_private_key = kdh_private_key();
 
-        let kdh_public_key = kdh_public_key(&kdh_credential);
+        let kdh_public_key = kdh_public_key();
 
         let random_nonce = hex::decode("167EB0E72781E4940112233445566778").unwrap();
 
@@ -634,7 +640,7 @@ mod tests {
 
         let kdh_private_key = kdh_private_key();
 
-        let kdh_public_key = kdh_public_key(&kdh_credential);
+        let kdh_public_key = kdh_public_key();
 
         let clear_key = hex::decode("0123456789ABCDEFFEDCBA9876543210").unwrap();
 
