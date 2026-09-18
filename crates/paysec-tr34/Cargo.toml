@@ -22,6 +22,7 @@ categories = ["cryptography"]
 [dependencies]
 cms.workspace = true
 der.workspace = true
+x509-cert.workspace = true
 zeroize.workspace = true
 
 [dev-dependencies]

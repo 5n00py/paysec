@@ -1,4 +1,3 @@
-use cms::cert::IssuerAndSerialNumber;
 use cms::signed_data::SignerIdentifier;
 
 use der::asn1::OctetStringRef;
@@ -6,7 +5,7 @@ use der::{Encode, Sequence};
 
 use zeroize::Zeroizing;
 
-use crate::Error;
+use crate::{Error, KdhCredential};
 
 const KEY_BLOCK_VERSION_V1: u8 = 0;
 
@@ -16,19 +15,19 @@ const KEY_BLOCK_VERSION_V1: u8 = 0;
 /// representation so alternative interoperability encodings can be added
 /// without changing the protocol model.
 pub(crate) struct KeyBlock<'a> {
-    id_kdh: &'a IssuerAndSerialNumber,
+    kdh_credential: &'a KdhCredential,
     clear_key: &'a [u8],
     key_block_header: &'a [u8],
 }
 
 impl<'a> KeyBlock<'a> {
     pub(crate) const fn new(
-        id_kdh: &'a IssuerAndSerialNumber,
+        kdh_credential: &'a KdhCredential,
         clear_key: &'a [u8],
         key_block_header: &'a [u8],
     ) -> Self {
         Self {
-            id_kdh,
+            kdh_credential,
             clear_key,
             key_block_header,
         }
@@ -40,7 +39,9 @@ impl<'a> KeyBlock<'a> {
 
         let key_block = KeyBlockAsn1 {
             version: KEY_BLOCK_VERSION_V1,
-            id_kdh: SignerIdentifier::IssuerAndSerialNumber(self.id_kdh.clone()),
+            id_kdh: SignerIdentifier::IssuerAndSerialNumber(
+                self.kdh_credential.issuer_and_serial_number(),
+            ),
             clear_key,
             key_block_header,
         };
@@ -69,27 +70,17 @@ struct KeyBlockAsn1<'a> {
 mod tests {
     use super::*;
 
-    use der::Decode;
+    const KDH_CERTIFICATE_DER: &[u8] = include_bytes!("../../tests/fixtures/kdh-certificate.der");
 
     #[test]
     fn encodes_normative_key_block() {
-        let id_kdh_der = hex::decode(
-            "304A\
-             3041\
-             310B3009060355040613025553\
-             31153013060355040A130C545233342053616D706C6573\
-             311B301906035504031312545233342053616D706C65204341204B4448\
-             02053400000006",
-        )
-        .unwrap();
-
-        let id_kdh = IssuerAndSerialNumber::from_der(&id_kdh_der).unwrap();
+        let credential = KdhCredential::from_der(KDH_CERTIFICATE_DER).unwrap();
 
         let clear_key = hex::decode("0123456789ABCDEFFEDCBA9876543210").unwrap();
 
         let key_block_header = b"A0256K0TB00E0000";
 
-        let key_block = KeyBlock::new(&id_kdh, &clear_key, key_block_header);
+        let key_block = KeyBlock::new(&credential, &clear_key, key_block_header);
 
         let encoded = key_block.to_der().unwrap();
 
