@@ -10,6 +10,9 @@ pub enum Tr34Error {
 
     /// The supplied X.509 credential is not valid DER.
     InvalidCertificate(der::Error),
+
+    /// The supplied X.509 certificate revocation list is not valid DER.
+    InvalidCrl(der::Error),
 }
 
 impl Display for Tr34Error {
@@ -22,6 +25,10 @@ impl Display for Tr34Error {
             Self::InvalidCertificate(error) => {
                 write!(f, "ERROR TR-34: Invalid X.509 certificate: {error}")
             }
+
+            Self::InvalidCrl(error) => {
+                write!(f, "ERROR TR-34: Invalid X.509 CRL: {error}")
+            }
         }
     }
 }
@@ -29,7 +36,9 @@ impl Display for Tr34Error {
 impl Error for Tr34Error {
     fn source(&self) -> Option<&(dyn Error + 'static)> {
         match self {
-            Self::Der(error) | Self::InvalidCertificate(error) => Some(error),
+            Self::Der(error) | Self::InvalidCertificate(error) | Self::InvalidCrl(error) => {
+                Some(error)
+            }
         }
     }
 }

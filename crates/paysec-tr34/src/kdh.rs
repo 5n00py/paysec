@@ -7,6 +7,14 @@ use paysec_crypto::{
 
 use zeroize::Zeroizing;
 
+use cms::content_info::ContentInfo;
+
+use der::Encode;
+
+use crate::asn1::signed_data::{build_key_token_signed_data, wrap_signed_data};
+
+use crate::{KdhCredential, KdhCrl, KrdCredential, Tr34CryptoError, Tr34Error};
+
 use crate::asn1::enveloped_data::{build_enveloped_data, encode_padded_key_block};
 
 use crate::asn1::signed_attributes::{
@@ -14,8 +22,6 @@ use crate::asn1::signed_attributes::{
 };
 
 use crate::asn1::signer_info::build_signer_info;
-
-use crate::{KdhCredential, KrdCredential, Tr34CryptoError};
 
 const AES_128_KEY_LENGTH: usize = 16;
 const AES_CBC_IV_LENGTH: usize = 16;
@@ -31,10 +37,6 @@ const AES_CBC_IV_LENGTH: usize = 16;
 /// 4. Encrypt the padded KeyBlock under KE.
 /// 5. Encrypt KE under the KRD public key using RSAES-OAEP-SHA256.
 /// 6. Construct the CMS EnvelopedData.
-///
-/// The KRD public key is supplied separately from `KrdCredential` so the
-/// TR-34 layer remains independent of any concrete cryptographic provider's
-/// public-key representation.
 pub(crate) fn build_enveloped_key_block<P, K>(
     provider: &mut P,
     kdh_credential: &KdhCredential,
@@ -47,12 +49,8 @@ where
     P: RandomBytes + AesCbc<[u8]> + RsaOaepSha256Encrypt<K>,
     K: ?Sized,
 {
-    // Perform deterministic encoding before consuming provider randomness.
-    //
-    // This buffer contains Kn in clear form and is zeroized on drop.
     let padded_key_block = encode_padded_key_block(kdh_credential, clear_key, key_block_header)?;
 
-    // KE is sensitive key material and must be zeroized on drop.
     let mut ephemeral_key = Zeroizing::new([0u8; AES_128_KEY_LENGTH]);
 
     provider
@@ -79,6 +77,63 @@ where
         &iv,
         &encrypted_key_block,
     )?)
+}
+
+/// Construct a complete strict two-pass TR-34 KDH key token.
+///
+/// This performs the complete KDH-side key transport flow:
+///
+/// 1. Encode and encrypt the inner KeyBlock.
+/// 2. Wrap KE for the KRD using RSAES-OAEP-SHA256.
+/// 3. DER-encode the resulting EnvelopedData exactly once.
+/// 4. Build the two-pass SignedAttributes over those exact bytes.
+/// 5. Sign the attributes using the KDH signing key.
+/// 6. Construct SignerInfo and SignedData.
+/// 7. Include CRLCA_KDH.
+/// 8. Wrap the SignedData in top-level CMS ContentInfo.
+pub(crate) fn build_two_pass_key_token<P, KrdKey, KdhKey>(
+    provider: &mut P,
+    kdh_credential: &KdhCredential,
+    krd_credential: &KrdCredential,
+    krd_public_key: &KrdKey,
+    kdh_signing_key: &KdhKey,
+    clear_key: &[u8],
+    key_block_header: &[u8],
+    random_nonce: &[u8],
+    kdh_crl: &KdhCrl,
+) -> Result<ContentInfo, Tr34CryptoError<<P as CryptoProvider>::Error>>
+where
+    P: RandomBytes + AesCbc<[u8]> + RsaOaepSha256Encrypt<KrdKey> + RsaPkcs1v15Sha256Sign<KdhKey>,
+    KrdKey: ?Sized,
+    KdhKey: ?Sized,
+{
+    let enveloped_data = build_enveloped_key_block(
+        provider,
+        kdh_credential,
+        krd_credential,
+        krd_public_key,
+        clear_key,
+        key_block_header,
+    )?;
+
+    // This is the single authoritative encoding of the inner
+    // EnvelopedData. These exact bytes are both digested by the signed
+    // attributes and embedded as SignedData eContent.
+    let encapsulated_content = enveloped_data.to_der().map_err(Tr34Error::from)?;
+
+    let signer_info = build_two_pass_signer_info(
+        provider,
+        kdh_credential,
+        kdh_signing_key,
+        &encapsulated_content,
+        random_nonce,
+        key_block_header,
+    )?;
+
+    let signed_data =
+        build_key_token_signed_data(&encapsulated_content, signer_info, Some(kdh_crl))?;
+
+    Ok(wrap_signed_data(&signed_data)?)
 }
 
 /// Construct the CMS SignerInfo for a two-pass TR-34 key token.
@@ -128,7 +183,7 @@ where
 mod tests {
     use super::*;
 
-    use der::Encode;
+    use der::{Decode, Encode};
 
     use paysec_crypto_rustcrypto::{RsaPrivateKey, RsaPublicKey, RustCryptoProvider};
     use rand_core::{CryptoRng, Error as RandError, RngCore};
@@ -138,11 +193,18 @@ mod tests {
 
     use rsa::pkcs8::{DecodePrivateKey, DecodePublicKey};
 
+    use cms::revocation::RevocationInfoChoice;
+    use cms::signed_data::SignedData;
+
+    use crate::oid::ID_SIGNED_DATA;
+
     const KDH_CERTIFICATE_DER: &[u8] = include_bytes!("../tests/fixtures/kdh-certificate.der");
 
     const KRD_CERTIFICATE_DER: &[u8] = include_bytes!("../tests/fixtures/krd-certificate.der");
 
     const KDH_PRIVATE_KEY_DER: &[u8] = include_bytes!("../tests/fixtures/kdh-private-key.der");
+
+    const KDH_CRL_DER: &[u8] = include_bytes!("../tests/fixtures/kdh-crl.der");
 
     struct FixedRng {
         bytes: Vec<u8>,
@@ -424,5 +486,77 @@ mod tests {
         );
 
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn builds_complete_two_pass_key_token() {
+        let kdh_credential = KdhCredential::from_der(KDH_CERTIFICATE_DER).unwrap();
+
+        let krd_credential = KrdCredential::from_der(KRD_CERTIFICATE_DER).unwrap();
+
+        let kdh_crl = KdhCrl::from_der(KDH_CRL_DER).unwrap();
+
+        let krd_public_key = krd_public_key(&krd_credential);
+
+        let kdh_private_key = kdh_private_key();
+
+        let kdh_public_key = kdh_public_key(&kdh_credential);
+
+        let clear_key = hex::decode("0123456789ABCDEFFEDCBA9876543210").unwrap();
+
+        let random_nonce = hex::decode("167EB0E72781E4940112233445566778").unwrap();
+
+        let key_block_header = b"A0256K0TB00E0000";
+
+        let mut provider = RustCryptoProvider::with_rng(deterministic_rng());
+
+        let content_info = build_two_pass_key_token(
+            &mut provider,
+            &kdh_credential,
+            &krd_credential,
+            &krd_public_key,
+            &kdh_private_key,
+            &clear_key,
+            key_block_header,
+            &random_nonce,
+            &kdh_crl,
+        )
+        .unwrap();
+
+        assert_eq!(content_info.content_type, ID_SIGNED_DATA);
+
+        let signed_data = SignedData::from_der(&content_info.content.to_der().unwrap()).unwrap();
+
+        assert_eq!(signed_data.version, cms::content_info::CmsVersion::V3);
+
+        assert!(signed_data.certificates.is_none());
+
+        let crls = signed_data.crls.as_ref().unwrap();
+
+        assert_eq!(crls.0.len(), 1);
+
+        match crls.0.get(0).unwrap() {
+            RevocationInfoChoice::Crl(crl) => {
+                assert_eq!(crl.to_der().unwrap(), KDH_CRL_DER);
+            }
+
+            other => {
+                panic!("unexpected revocation information: {other:?}");
+            }
+        }
+
+        let signer_info = signed_data.signer_infos.0.get(0).unwrap();
+
+        let signed_attributes = signer_info.signed_attrs.as_ref().unwrap();
+
+        let signing_der = signed_attributes_signing_der(signed_attributes).unwrap();
+
+        provider
+            .verify_pkcs1v15_sha256(
+                &kdh_public_key,
+                &signing_der,
+                signer_info.signature.as_bytes(),
+            )
+            .unwrap();
     }
 }

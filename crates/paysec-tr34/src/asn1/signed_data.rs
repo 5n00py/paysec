@@ -14,7 +14,7 @@ use crate::asn1::signer_info::sha256_algorithm_identifier;
 
 use crate::oid::{ID_ENVELOPED_DATA, ID_SIGNED_DATA};
 
-use crate::Tr34Error;
+use crate::{KdhCrl, Tr34Error};
 
 /// Construct the outer CMS SignedData for a TR-34 key token.
 ///
@@ -25,22 +25,29 @@ use crate::Tr34Error;
 /// The certificates field is omitted because the KRD is expected to
 /// already possess the bound KDH credential.
 ///
-/// `crls` is represented as optional at this low-level CMS layer. A
-/// complete TR-34 key-token operation is responsible for supplying the
-/// required KDH CA revocation information.
+/// Strict TR-34 key transport includes CRLCA_KDH. This lower-level
+/// constructor nevertheless allows the CRL to be omitted so that
+/// compatibility encodings can be represented without changing the
+/// CMS assembly layer.
 pub(crate) fn build_key_token_signed_data(
     encapsulated_content: &[u8],
     signer_info: SignerInfo,
-    crls: Option<RevocationInfoChoices>,
+    kdh_crl: Option<&KdhCrl>,
 ) -> Result<SignedData, Tr34Error> {
     let digest_algorithms =
         DigestAlgorithmIdentifiers::try_from(vec![sha256_algorithm_identifier()])?;
 
     let signer_infos = SignerInfos::try_from(vec![signer_info])?;
 
+    let crls = match kdh_crl {
+        Some(kdh_crl) => Some(RevocationInfoChoices::try_from(vec![
+            kdh_crl.revocation_info_choice(),
+        ])?),
+
+        None => None,
+    };
+
     Ok(SignedData {
-        // RFC 5652 requires version 3 when eContentType is other than
-        // id-data. TR-34 uses id-envelopedData here.
         version: CmsVersion::V3,
 
         digest_algorithms,
@@ -48,15 +55,11 @@ pub(crate) fn build_key_token_signed_data(
         encap_content_info: EncapsulatedContentInfo {
             econtent_type: ID_ENVELOPED_DATA,
 
-            // Important: these are the exact bytes whose SHA-256 digest
-            // appears in the signed messageDigest attribute.
             econtent: Some(Any::encode_from(&OctetString::new(
                 encapsulated_content.to_vec(),
             )?)?),
         },
 
-        // CredKDH was established during binding and is therefore not
-        // repeated in the key token.
         certificates: None,
 
         crls,
@@ -89,6 +92,12 @@ mod tests {
 
     const KDH_CERTIFICATE_DER: &[u8] = include_bytes!("../../tests/fixtures/kdh-certificate.der");
 
+    const KDH_CRL_DER: &[u8] = include_bytes!("../../tests/fixtures/kdh-crl.der");
+
+    fn kdh_crl() -> KdhCrl {
+        KdhCrl::from_der(KDH_CRL_DER).unwrap()
+    }
+
     fn signer_info(encapsulated_content: &[u8]) -> SignerInfo {
         let credential = KdhCredential::from_der(KDH_CERTIFICATE_DER).unwrap();
 
@@ -113,8 +122,10 @@ mod tests {
         let expected_digest_algorithms =
             DigestAlgorithmIdentifiers::try_from(vec![sha256_algorithm_identifier()]).unwrap();
 
+        let kdh_crl = kdh_crl();
+
         let signed_data =
-            build_key_token_signed_data(encapsulated_content, signer_info, None).unwrap();
+            build_key_token_signed_data(encapsulated_content, signer_info, Some(&kdh_crl)).unwrap();
 
         assert_eq!(signed_data.version, CmsVersion::V3);
 
@@ -137,9 +148,23 @@ mod tests {
 
         assert!(signed_data.certificates.is_none());
 
-        assert!(signed_data.crls.is_none());
+        assert!(signed_data.crls.is_some());
 
         assert_eq!(signed_data.signer_infos, expected_signer_infos);
+
+        let crls = signed_data.crls.as_ref().unwrap();
+
+        assert_eq!(crls.0.len(), 1);
+
+        match crls.0.get(0).unwrap() {
+            cms::revocation::RevocationInfoChoice::Crl(crl) => {
+                assert_eq!(crl.to_der().unwrap(), KDH_CRL_DER);
+            }
+
+            other => {
+                panic!("unexpected revocation information: {other:?}");
+            }
+        }
     }
 
     #[test]
