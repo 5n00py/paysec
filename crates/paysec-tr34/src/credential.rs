@@ -5,10 +5,10 @@ use der::{Decode, Encode};
 
 use x509_cert::Certificate;
 
-use crate::Error;
+use crate::Tr34Error;
 
-fn parse_certificate(input: &[u8]) -> Result<Certificate, Error> {
-    Certificate::from_der(input).map_err(Error::InvalidCertificate)
+fn parse_certificate(input: &[u8]) -> Result<Certificate, Tr34Error> {
+    Certificate::from_der(input).map_err(Tr34Error::InvalidCertificate)
 }
 
 fn issuer_and_serial_number(certificate: &Certificate) -> IssuerAndSerialNumber {
@@ -30,7 +30,7 @@ pub struct KdhCredential {
 
 impl KdhCredential {
     /// Parse a DER-encoded KDH certificate.
-    pub fn from_der(input: &[u8]) -> Result<Self, Error> {
+    pub fn from_der(input: &[u8]) -> Result<Self, Tr34Error> {
         Ok(Self {
             certificate: parse_certificate(input)?,
         })
@@ -68,7 +68,7 @@ pub struct KrdCredential {
 
 impl KrdCredential {
     /// Parse a DER-encoded KRD certificate.
-    pub fn from_der(input: &[u8]) -> Result<Self, Error> {
+    pub fn from_der(input: &[u8]) -> Result<Self, Tr34Error> {
         Ok(Self {
             certificate: parse_certificate(input)?,
         })
@@ -94,7 +94,7 @@ impl KrdCredential {
     ///
     /// The returned value is provider-neutral. A concrete cryptographic
     /// provider may import or otherwise consume this representation.
-    pub fn subject_public_key_info_der(&self) -> Result<Vec<u8>, Error> {
+    pub fn subject_public_key_info_der(&self) -> Result<Vec<u8>, Tr34Error> {
         Ok(self
             .certificate
             .tbs_certificate

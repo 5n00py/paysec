@@ -22,6 +22,7 @@ categories = ["cryptography"]
 [dependencies]
 cms.workspace = true
 der.workspace = true
+paysec-crypto.workspace = true
 pkcs1.workspace = true
 sha2.workspace = true
 spki.workspace = true
@@ -30,7 +31,6 @@ zeroize.workspace = true
 
 [dev-dependencies]
 hex.workspace = true
-paysec-crypto.workspace = true
 paysec-crypto-rustcrypto.workspace = true
 rand_core.workspace = true
 rsa.workspace = true

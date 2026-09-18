@@ -5,7 +5,7 @@ use der::{Encode, Sequence};
 
 use zeroize::Zeroizing;
 
-use crate::{Error, KdhCredential};
+use crate::{KdhCredential, Tr34Error};
 
 const KEY_BLOCK_VERSION_V1: u8 = 0;
 
@@ -33,7 +33,7 @@ impl<'a> KeyBlock<'a> {
         }
     }
 
-    pub(crate) fn to_der(&self) -> Result<Zeroizing<Vec<u8>>, Error> {
+    pub(crate) fn to_der(&self) -> Result<Zeroizing<Vec<u8>>, Tr34Error> {
         let clear_key = OctetStringRef::new(self.clear_key)?;
         let key_block_header = OctetStringRef::new(self.key_block_header)?;
 

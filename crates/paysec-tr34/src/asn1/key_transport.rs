@@ -11,7 +11,7 @@ use sha2::Sha256;
 use spki::AlgorithmIdentifierOwned;
 
 use crate::oid::RSAES_OAEP;
-use crate::{Error, KrdCredential};
+use crate::{KrdCredential, Tr34Error};
 
 /// Construct the RSAES-OAEP AlgorithmIdentifier required by TR-34.
 ///
@@ -23,7 +23,8 @@ use crate::{Error, KrdCredential};
 ///
 /// `RsaOaepParams` performs canonical DER encoding of the PKCS #1
 /// RSAES-OAEP parameters.
-pub(crate) fn rsa_oaep_sha256_algorithm_identifier() -> Result<AlgorithmIdentifierOwned, Error> {
+pub(crate) fn rsa_oaep_sha256_algorithm_identifier() -> Result<AlgorithmIdentifierOwned, Tr34Error>
+{
     let parameters = RsaOaepParams::new::<Sha256>().to_der()?;
 
     Ok(AlgorithmIdentifierOwned {
@@ -43,7 +44,7 @@ pub(crate) fn rsa_oaep_sha256_algorithm_identifier() -> Result<AlgorithmIdentifi
 pub(crate) fn build_key_transport_recipient_info(
     krd_credential: &KrdCredential,
     encrypted_key: &[u8],
-) -> Result<KeyTransRecipientInfo, Error> {
+) -> Result<KeyTransRecipientInfo, Tr34Error> {
     Ok(KeyTransRecipientInfo {
         version: CmsVersion::V0,
         rid: krd_credential.recipient_identifier(),

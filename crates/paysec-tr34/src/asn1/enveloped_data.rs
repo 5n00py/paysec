@@ -10,7 +10,7 @@ use zeroize::Zeroizing;
 use crate::asn1::key_block::KeyBlock;
 use crate::asn1::key_transport::build_key_transport_recipient_info;
 use crate::oid::{ID_AES_128_CBC, ID_DATA};
-use crate::{Error, KdhCredential, KrdCredential};
+use crate::{KdhCredential, KrdCredential, Tr34Error};
 
 const AES_BLOCK_SIZE: usize = 16;
 
@@ -23,7 +23,7 @@ pub(crate) fn encode_padded_key_block(
     kdh_credential: &KdhCredential,
     clear_key: &[u8],
     key_block_header: &[u8],
-) -> Result<Zeroizing<Vec<u8>>, Error> {
+) -> Result<Zeroizing<Vec<u8>>, Tr34Error> {
     let encoded = KeyBlock::new(kdh_credential, clear_key, key_block_header).to_der()?;
 
     Ok(pad_cms_content(encoded))
@@ -48,7 +48,7 @@ fn pad_cms_content(mut content: Zeroizing<Vec<u8>>) -> Zeroizing<Vec<u8>> {
 /// an OCTET STRING.
 pub(crate) fn aes_128_cbc_algorithm_identifier(
     iv: &[u8; AES_BLOCK_SIZE],
-) -> Result<AlgorithmIdentifierOwned, Error> {
+) -> Result<AlgorithmIdentifierOwned, Tr34Error> {
     let iv = OctetString::new(iv.as_slice())?;
 
     Ok(AlgorithmIdentifierOwned {
@@ -62,7 +62,7 @@ pub(crate) fn aes_128_cbc_algorithm_identifier(
 pub(crate) fn build_encrypted_content_info(
     iv: &[u8; AES_BLOCK_SIZE],
     encrypted_key_block: &[u8],
-) -> Result<EncryptedContentInfo, Error> {
+) -> Result<EncryptedContentInfo, Tr34Error> {
     Ok(EncryptedContentInfo {
         content_type: ID_DATA,
         content_enc_alg: aes_128_cbc_algorithm_identifier(iv)?,
@@ -82,7 +82,7 @@ pub(crate) fn build_enveloped_data(
     encrypted_ephemeral_key: &[u8],
     iv: &[u8; AES_BLOCK_SIZE],
     encrypted_key_block: &[u8],
-) -> Result<EnvelopedData, Error> {
+) -> Result<EnvelopedData, Tr34Error> {
     let recipient_info =
         build_key_transport_recipient_info(krd_credential, encrypted_ephemeral_key)?;
 
