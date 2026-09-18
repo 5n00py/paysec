@@ -27,3 +27,4 @@ zeroize.workspace = true
 
 [dev-dependencies]
 hex.workspace = true
+rsa.workspace = true
