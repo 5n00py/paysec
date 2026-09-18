@@ -19,3 +19,8 @@ pub(crate) const RSAES_OAEP: ObjectIdentifier =
 
 pub(crate) const ID_AES_128_CBC: ObjectIdentifier =
     ObjectIdentifier::new_unwrap("2.16.840.1.101.3.4.1.2");
+pub(crate) const ID_SHA_256: ObjectIdentifier =
+    ObjectIdentifier::new_unwrap("2.16.840.1.101.3.4.2.1");
+
+pub(crate) const SHA256_WITH_RSA_ENCRYPTION: ObjectIdentifier =
+    ObjectIdentifier::new_unwrap("1.2.840.113549.1.1.11");
