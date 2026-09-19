@@ -7,6 +7,10 @@ use paysec_tr34::{KdhCredential, KdhCrl, KrdCredential};
 
 use x509_cert::Certificate;
 
+use paysec_crypto::{AesBlockCipher, AesCbc};
+
+use paysec_crypto_rustcrypto::RustCryptoProvider;
+
 const KDH_1_CERTIFICATE_DER: &[u8] = include_bytes!("fixtures/tr34-2019/kdh-1-certificate.der");
 
 const KRD_1_CERTIFICATE_DER: &[u8] = include_bytes!("fixtures/tr34-2019/krd-1-certificate.der");
@@ -16,6 +20,62 @@ const CA_KDH_CRL_DER: &[u8] = include_bytes!("fixtures/tr34-2019/ca-kdh.crl.der"
 const AES_KEY_BLOCK_DER: &[u8] = include_bytes!("fixtures/tr34-2019/aes-key-block.der");
 
 const AES_ENVELOPED_DATA_DER: &[u8] = include_bytes!("fixtures/tr34-2019/aes-enveloped-data.der");
+
+const AES_BLOCK_SIZE: usize = 16;
+
+fn official_aes_ephemeral_key() -> [u8; AES_BLOCK_SIZE] {
+    hex::decode("0123456789ABCDEFFEDCBA9876543210")
+        .unwrap()
+        .try_into()
+        .unwrap()
+}
+
+fn official_aes_ciphertext() -> Vec<u8> {
+    hex::decode(concat!(
+        "0DDE931D281DEB8BCCAAF801944DF5A8",
+        "B3D6056B67B3B5E64319DB02986E5D2A",
+        "3BA7871D509F8EC36C269A3EF93C53C0",
+        "A87538DB781C2D0DC0A67D4E5A6797E9",
+        "676B94CD6F63E610418B743797FD37DC",
+        "AA45FB89CCA7507A38751E02EABF4321",
+        "43B9A60630F453C2E736FECDD49F4E62",
+        "63F6294D408C1AD4A755B697E752458F",
+        "7C17103B420A4BB52B9CDEA8687D2784",
+    ))
+    .unwrap()
+}
+
+fn recover_official_aes_iv() -> [u8; AES_BLOCK_SIZE] {
+    let provider = RustCryptoProvider::new();
+
+    let key = official_aes_ephemeral_key();
+
+    let first_ciphertext_block: [u8; AES_BLOCK_SIZE] = official_aes_ciphertext()[..AES_BLOCK_SIZE]
+        .try_into()
+        .unwrap();
+
+    // B.2.2.3.2 encrypts an Annex-B-style KeyBlock. Its first block is
+    // identical to the independently published AES KeyBlock in B.2.2.2.4,
+    // so CBC gives us:
+    //
+    //     IV = AES^-1_K(C1) XOR P1
+    //
+    // This lets us recover the actual 16-byte IV used to produce the
+    // published ciphertext despite Annex B serializing only eight bytes.
+    let decrypted_first_block = provider
+        .decrypt_block(key.as_slice(), &first_ciphertext_block)
+        .unwrap();
+
+    let first_plaintext_block = &AES_KEY_BLOCK_DER[..AES_BLOCK_SIZE];
+
+    let mut iv = [0u8; AES_BLOCK_SIZE];
+
+    for index in 0..AES_BLOCK_SIZE {
+        iv[index] = decrypted_first_block[index] ^ first_plaintext_block[index];
+    }
+
+    iv
+}
 
 fn find_subslice(haystack: &[u8], needle: &[u8]) -> Option<usize> {
     haystack
@@ -175,4 +235,87 @@ fn official_aes_key_block_fixture_is_preserved_for_compatibility_work() {
 
     // Published AES sample KBH.
     assert!(find_subslice(AES_KEY_BLOCK_DER, b"D0256K0AB00E0000",).is_some(),);
+}
+
+#[test]
+fn recovers_official_aes_iv_from_first_cbc_block() {
+    let recovered_iv = recover_official_aes_iv();
+
+    let expected_iv: [u8; AES_BLOCK_SIZE] = hex::decode("0123456789ABCDEF0000000000000000")
+        .unwrap()
+        .try_into()
+        .unwrap();
+
+    assert_eq!(recovered_iv, expected_iv,);
+}
+
+#[test]
+fn decrypts_official_aes_ciphertext_with_recovered_iv() {
+    let provider = RustCryptoProvider::new();
+
+    let key = official_aes_ephemeral_key();
+
+    let iv = recover_official_aes_iv();
+
+    let plaintext = provider
+        .decrypt_cbc(key.as_slice(), &iv, &official_aes_ciphertext())
+        .unwrap();
+
+    assert_eq!(plaintext.len(), 144,);
+
+    // The beginning of the decrypted object agrees with the independently
+    // published Annex B.2.2.2.4 AES KeyBlock. The divergence occurs later
+    // in the KBH value.
+    assert_eq!(&plaintext[..100], &AES_KEY_BLOCK_DER[..100],);
+}
+
+#[test]
+fn decrypted_official_aes_key_block_has_valid_padding() {
+    let provider = RustCryptoProvider::new();
+
+    let key = official_aes_ephemeral_key();
+
+    let iv = recover_official_aes_iv();
+
+    let plaintext = provider
+        .decrypt_cbc(key.as_slice(), &iv, &official_aes_ciphertext())
+        .unwrap();
+
+    // The decrypted KeyBlock is 133 bytes. AES-CBC therefore has eleven
+    // bytes of CMS/PKCS#7 padding, each containing 0x0B.
+    let padding_length = *plaintext.last().unwrap() as usize;
+
+    assert_eq!(padding_length, 11,);
+
+    assert_eq!(&plaintext[plaintext.len() - padding_length..], &[0x0B; 11],);
+
+    assert_eq!(plaintext.len() - padding_length, 133,);
+}
+
+#[test]
+fn decrypted_official_aes_key_block_uses_a0256_header() {
+    let provider = RustCryptoProvider::new();
+
+    let key = official_aes_ephemeral_key();
+
+    let iv = recover_official_aes_iv();
+
+    let padded_plaintext = provider
+        .decrypt_cbc(key.as_slice(), &iv, &official_aes_ciphertext())
+        .unwrap();
+
+    let padding_length = *padded_plaintext.last().unwrap() as usize;
+
+    let key_block = &padded_plaintext[..padded_plaintext.len() - padding_length];
+
+    assert_eq!(key_block.len(), 133,);
+
+    // B.2.2.3.2 was not produced from the separately published AES
+    // KeyBlock in B.2.2.2.4. Its decrypted plaintext instead contains
+    // the TDEA-style sample KBH used elsewhere in Annex B.
+    assert!(find_subslice(key_block, b"A0256K0TB00E0000",).is_some(),);
+
+    assert!(find_subslice(key_block, b"D0256K0AB00E0000",).is_none(),);
+
+    assert_ne!(key_block, AES_KEY_BLOCK_DER,);
 }
