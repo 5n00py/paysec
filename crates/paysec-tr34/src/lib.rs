@@ -14,6 +14,7 @@ mod crl;
 mod error;
 mod kdh;
 mod oid;
+mod profile;
 
 pub use credential::{KdhCredential, KrdCredential};
 
@@ -22,3 +23,5 @@ pub use crl::KdhCrl;
 pub use error::{Tr34CryptoError, Tr34Error};
 
 pub use kdh::{TwoPassKeyExportRequest, export_key_two_pass};
+
+pub use profile::Tr34Profile;

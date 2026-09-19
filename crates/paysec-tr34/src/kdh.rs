@@ -13,7 +13,7 @@ use der::Encode;
 
 use crate::asn1::signed_data::{build_key_token_signed_data, wrap_signed_data};
 
-use crate::{KdhCredential, KdhCrl, KrdCredential, Tr34CryptoError, Tr34Error};
+use crate::{KdhCredential, KdhCrl, KrdCredential, Tr34CryptoError, Tr34Error, Tr34Profile};
 
 use crate::asn1::enveloped_data::{build_enveloped_data, encode_padded_key_block};
 
@@ -22,6 +22,8 @@ use crate::asn1::signed_attributes::{
 };
 
 use crate::asn1::signer_info::build_signer_info;
+
+use crate::profile::EncodingPolicy;
 
 const AES_128_KEY_LENGTH: usize = 16;
 const AES_CBC_IV_LENGTH: usize = 16;
@@ -42,10 +44,15 @@ pub struct TwoPassKeyExportRequest<'a> {
     key_block_header: &'a [u8],
     krd_random_nonce: &'a [u8],
     kdh_crl: &'a KdhCrl,
+    profile: Tr34Profile,
 }
 
 impl<'a> TwoPassKeyExportRequest<'a> {
-    /// Construct a strict two-pass TR-34 key export request.
+    /// Construct a two-pass TR-34 key export request.
+    ///
+    /// The request uses [`Tr34Profile::Strict`] by default. A different
+    /// supported encoding profile can be selected with
+    /// [`TwoPassKeyExportRequest::with_profile`].
     ///
     /// `krd_random_nonce` is the random nonce received from the KRD for
     /// this transaction.
@@ -67,7 +74,15 @@ impl<'a> TwoPassKeyExportRequest<'a> {
             key_block_header,
             krd_random_nonce,
             kdh_crl,
+            profile: Tr34Profile::Strict,
         }
+    }
+
+    /// Select the TR-34 encoding profile for this export.
+    #[must_use]
+    pub fn with_profile(mut self, profile: Tr34Profile) -> Self {
+        self.profile = profile;
+        self
     }
 }
 
@@ -146,6 +161,7 @@ pub(crate) fn build_two_pass_key_token<P, KrdKey, KdhKey>(
     key_block_header: &[u8],
     random_nonce: &[u8],
     kdh_crl: &KdhCrl,
+    _policy: EncodingPolicy,
 ) -> Result<ContentInfo, Tr34CryptoError<<P as CryptoProvider>::Error>>
 where
     P: RandomBytes + AesCbc<[u8]> + RsaOaepSha256Encrypt<KrdKey> + RsaPkcs1v15Sha256Sign<KdhKey>,
@@ -224,7 +240,10 @@ where
     )?)
 }
 
-/// Export a key using the strict two-pass TR-34 encoding profile.
+/// Export a key using the selected two-pass TR-34 encoding profile.
+///
+/// Requests created with [`TwoPassKeyExportRequest::new`] use
+/// [`Tr34Profile::Strict`] by default.
 ///
 /// The returned byte vector is the complete DER-encoded CMS ContentInfo
 /// containing the TR-34 KDH key token.
@@ -249,6 +268,8 @@ where
     KrdKey: ?Sized,
     KdhKey: ?Sized,
 {
+    let policy = EncodingPolicy::for_profile(request.profile);
+
     let content_info = build_two_pass_key_token(
         provider,
         request.kdh_credential,
@@ -259,6 +280,7 @@ where
         request.key_block_header,
         request.krd_random_nonce,
         request.kdh_crl,
+        policy,
     )?;
 
     content_info
@@ -426,6 +448,7 @@ mod tests {
             key_block_header,
             &random_nonce,
             &kdh_crl,
+            EncodingPolicy::for_profile(Tr34Profile::Strict),
         )
         .unwrap()
         .to_der()
@@ -660,6 +683,7 @@ mod tests {
             key_block_header,
             &random_nonce,
             &kdh_crl,
+            EncodingPolicy::for_profile(Tr34Profile::Strict),
         )
         .unwrap();
 
@@ -771,5 +795,46 @@ mod tests {
         assert_eq!(actual.len(), 1627,);
 
         assert_eq!(actual, expected,);
+    }
+
+    #[test]
+    fn two_pass_key_export_request_defaults_to_strict_profile() {
+        let kdh_credential = KdhCredential::from_der(KDH_CERTIFICATE_DER).unwrap();
+
+        let krd_credential = KrdCredential::from_der(KRD_CERTIFICATE_DER).unwrap();
+
+        let kdh_crl = KdhCrl::from_der(KDH_CRL_DER).unwrap();
+
+        let request = TwoPassKeyExportRequest::new(
+            &kdh_credential,
+            &krd_credential,
+            b"0123456789ABCDEF",
+            b"A0256K0TB00E0000",
+            b"0123456789ABCDEF",
+            &kdh_crl,
+        );
+
+        assert_eq!(request.profile, Tr34Profile::Strict,);
+    }
+
+    #[test]
+    fn two_pass_key_export_request_uses_selected_profile() {
+        let kdh_credential = KdhCredential::from_der(KDH_CERTIFICATE_DER).unwrap();
+
+        let krd_credential = KrdCredential::from_der(KRD_CERTIFICATE_DER).unwrap();
+
+        let kdh_crl = KdhCrl::from_der(KDH_CRL_DER).unwrap();
+
+        let request = TwoPassKeyExportRequest::new(
+            &kdh_credential,
+            &krd_credential,
+            b"0123456789ABCDEF",
+            b"A0256K0TB00E0000",
+            b"0123456789ABCDEF",
+            &kdh_crl,
+        )
+        .with_profile(Tr34Profile::Strict);
+
+        assert_eq!(request.profile, Tr34Profile::Strict,);
     }
 }
