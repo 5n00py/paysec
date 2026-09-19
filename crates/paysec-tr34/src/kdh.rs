@@ -104,12 +104,19 @@ pub(crate) fn build_enveloped_key_block<P, K>(
     krd_public_key: &K,
     clear_key: &[u8],
     key_block_header: &[u8],
+    policy: EncodingPolicy,
 ) -> Result<EnvelopedData, Tr34CryptoError<<P as CryptoProvider>::Error>>
 where
     P: RandomBytes + AesCbc<[u8]> + RsaOaepSha256Encrypt<K>,
     K: ?Sized,
 {
-    let padded_key_block = encode_padded_key_block(kdh_credential, clear_key, key_block_header)?;
+    let padded_key_block = encode_padded_key_block(
+        kdh_credential,
+        clear_key,
+        key_block_header,
+        policy.key_block_version,
+        policy.key_block_header,
+    )?;
 
     let mut ephemeral_key = Zeroizing::new([0u8; AES_128_KEY_LENGTH]);
 
@@ -139,7 +146,7 @@ where
     )?)
 }
 
-/// Construct a complete strict two-pass TR-34 KDH key token.
+/// Construct a complete two-pass TR-34 KDH key token.
 ///
 /// This performs the complete KDH-side key transport flow:
 ///
@@ -161,7 +168,7 @@ pub(crate) fn build_two_pass_key_token<P, KrdKey, KdhKey>(
     key_block_header: &[u8],
     random_nonce: &[u8],
     kdh_crl: &KdhCrl,
-    _policy: EncodingPolicy,
+    policy: EncodingPolicy,
 ) -> Result<ContentInfo, Tr34CryptoError<<P as CryptoProvider>::Error>>
 where
     P: RandomBytes + AesCbc<[u8]> + RsaOaepSha256Encrypt<KrdKey> + RsaPkcs1v15Sha256Sign<KdhKey>,
@@ -175,6 +182,7 @@ where
         krd_public_key,
         clear_key,
         key_block_header,
+        policy,
     )?;
 
     // This is the single authoritative encoding of the inner
@@ -474,6 +482,7 @@ mod tests {
             &public_key,
             &clear_key,
             b"A0256K0TB00E0000",
+            EncodingPolicy::for_profile(Tr34Profile::Strict),
         )
         .unwrap();
 
@@ -537,6 +546,7 @@ mod tests {
             &public_key,
             &clear_key,
             b"A0256K0TB00E0000",
+            EncodingPolicy::for_profile(Tr34Profile::Strict),
         )
         .unwrap();
 
@@ -547,10 +557,11 @@ mod tests {
             &public_key,
             &clear_key,
             b"A0256K0TB00E0000",
+            EncodingPolicy::for_profile(Tr34Profile::Strict),
         )
         .unwrap();
 
-        assert_eq!(enveloped_a.to_der().unwrap(), enveloped_b.to_der().unwrap());
+        assert_eq!(enveloped_a.to_der().unwrap(), enveloped_b.to_der().unwrap(),);
     }
 
     #[test]
@@ -580,6 +591,7 @@ mod tests {
             &krd_public_key,
             &clear_key,
             key_block_header,
+            EncodingPolicy::for_profile(Tr34Profile::Strict),
         )
         .unwrap();
 

@@ -10,12 +10,13 @@ use zeroize::Zeroizing;
 use crate::asn1::key_block::KeyBlock;
 use crate::asn1::key_transport::build_key_transport_recipient_info;
 use crate::oid::{ID_AES_128_CBC, ID_DATA};
+use crate::profile::{KeyBlockHeaderEncoding, KeyBlockVersionEncoding};
 use crate::{KdhCredential, KrdCredential, Tr34Error};
 
 const AES_BLOCK_SIZE: usize = 16;
 
-/// Encode the strict TR-34 KeyBlock and apply the CMS content-encryption
-/// padding required before AES-CBC encryption.
+/// Encode a TR-34 KeyBlock using the selected internal encoding and apply
+/// the CMS content-encryption padding required before AES-CBC encryption.
 ///
 /// The returned buffer contains the transported key in clear form and is
 /// therefore zeroized on drop.
@@ -23,8 +24,11 @@ pub(crate) fn encode_padded_key_block(
     kdh_credential: &KdhCredential,
     clear_key: &[u8],
     key_block_header: &[u8],
+    version_encoding: KeyBlockVersionEncoding,
+    header_encoding: KeyBlockHeaderEncoding,
 ) -> Result<Zeroizing<Vec<u8>>, Tr34Error> {
-    let encoded = KeyBlock::new(kdh_credential, clear_key, key_block_header).to_der()?;
+    let encoded = KeyBlock::new(kdh_credential, clear_key, key_block_header)
+        .to_der(version_encoding, header_encoding)?;
 
     Ok(pad_cms_content(encoded))
 }
@@ -117,8 +121,14 @@ mod tests {
 
         let clear_key = hex::decode("0123456789ABCDEFFEDCBA9876543210").unwrap();
 
-        let padded = encode_padded_key_block(&credential, &clear_key, b"A0256K0TB00E0000").unwrap();
-
+        let padded = encode_padded_key_block(
+            &credential,
+            &clear_key,
+            b"A0256K0TB00E0000",
+            KeyBlockVersionEncoding::AnnexD,
+            KeyBlockHeaderEncoding::BareOctetString,
+        )
+        .unwrap();
         // Strict KeyBlock DER is 117 bytes.
         // CMS therefore adds eleven 0x0B bytes.
         assert_eq!(padded.len(), 128);
@@ -165,7 +175,14 @@ mod tests {
 
         let clear_key = hex::decode("0123456789ABCDEFFEDCBA9876543210").unwrap();
 
-        let padded = encode_padded_key_block(&credential, &clear_key, b"A0256K0TB00E0000").unwrap();
+        let padded = encode_padded_key_block(
+            &credential,
+            &clear_key,
+            b"A0256K0TB00E0000",
+            KeyBlockVersionEncoding::AnnexD,
+            KeyBlockHeaderEncoding::BareOctetString,
+        )
+        .unwrap();
 
         let ephemeral_key = hex::decode("A1A2A3A4A5A6A7A8A9AAABACADAEAFB0").unwrap();
 
@@ -203,8 +220,14 @@ mod tests {
 
         let clear_key = hex::decode("0123456789ABCDEFFEDCBA9876543210").unwrap();
 
-        let padded =
-            encode_padded_key_block(&kdh_credential, &clear_key, b"A0256K0TB00E0000").unwrap();
+        let padded = encode_padded_key_block(
+            &kdh_credential,
+            &clear_key,
+            b"A0256K0TB00E0000",
+            KeyBlockVersionEncoding::AnnexD,
+            KeyBlockHeaderEncoding::BareOctetString,
+        )
+        .unwrap();
 
         let ephemeral_key = hex::decode("A1A2A3A4A5A6A7A8A9AAABACADAEAFB0").unwrap();
 
@@ -259,5 +282,38 @@ mod tests {
         let decoded = EnvelopedData::from_der(&encoded).unwrap();
 
         assert_eq!(decoded, enveloped_data);
+    }
+
+    #[test]
+    fn cms_padding_supports_annex_b_aes_key_block() {
+        const ANNEX_B_KDH_CERTIFICATE_DER: &[u8] =
+            include_bytes!("../../tests/fixtures/tr34-2019/kdh-1-certificate.der");
+
+        const ANNEX_B_AES_KEY_BLOCK_DER: &[u8] =
+            include_bytes!("../../tests/fixtures/tr34-2019/aes-key-block.der");
+
+        let credential = KdhCredential::from_der(ANNEX_B_KDH_CERTIFICATE_DER).unwrap();
+
+        let clear_key = hex::decode("0123456789ABCDEFFEDCBA9876543210").unwrap();
+
+        let padded = encode_padded_key_block(
+            &credential,
+            &clear_key,
+            b"D0256K0AB00E0000",
+            KeyBlockVersionEncoding::AnnexBSample,
+            KeyBlockHeaderEncoding::DataAttribute,
+        )
+        .unwrap();
+
+        assert_eq!(
+            &padded[..ANNEX_B_AES_KEY_BLOCK_DER.len()],
+            ANNEX_B_AES_KEY_BLOCK_DER,
+        );
+
+        assert_eq!(ANNEX_B_AES_KEY_BLOCK_DER.len(), 133,);
+
+        assert_eq!(padded.len(), 144,);
+
+        assert_eq!(&padded[133..], &[0x0B; 11],);
     }
 }
