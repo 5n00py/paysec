@@ -10,21 +10,25 @@ use cms::content_info::ContentInfo;
 
 use der::Encode;
 
-use crate::asn1::signed_data::{build_key_token_signed_data, wrap_signed_data};
-
 use crate::{KdhCredential, KdhCrl, KrdCredential, Tr34CryptoError, Tr34Error, Tr34Profile};
-
-use crate::asn1::signed_attributes::{
-    build_two_pass_signed_attributes, signed_attributes_signing_der,
-};
-
-use crate::asn1::signer_info::build_signer_info;
 
 use crate::asn1::enveloped_data::{
     build_enveloped_data, encode_annex_b_enveloped_data, encode_padded_key_block,
 };
 
-use crate::profile::{EncodingPolicy, EncryptedContentLayout};
+use crate::asn1::signed_attributes::{
+    build_two_pass_signed_attributes, encode_annex_b_two_pass_signed_attributes,
+    signed_attributes_signing_der,
+};
+
+use crate::asn1::signed_data::{
+    build_key_token_signed_data, encode_signed_data_with_signer_info_der, wrap_signed_data,
+    wrap_signed_data_der,
+};
+
+use crate::asn1::signer_info::{build_signer_info, encode_signer_info_with_signed_attributes_der};
+
+use crate::profile::{EncodingPolicy, EncryptedContentLayout, SignedAttributesOrder};
 
 const AES_128_KEY_LENGTH: usize = 16;
 const AES_CBC_IV_LENGTH: usize = 16;
@@ -162,9 +166,9 @@ where
 ///
 /// 1. Encode and encrypt the inner KeyBlock.
 /// 2. Wrap KE for the KRD using RSAES-OAEP-SHA256.
-/// 3. DER-encode the resulting EnvelopedData exactly once.
+/// 3. Encode the resulting EnvelopedData exactly once.
 /// 4. Build the two-pass SignedAttributes over those exact bytes.
-/// 5. Sign the attributes using the KDH signing key.
+/// 5. Sign the exact SignedAttributes representation selected by the profile.
 /// 6. Construct SignerInfo and SignedData.
 /// 7. Include CRLCA_KDH.
 /// 8. Wrap the SignedData in top-level CMS ContentInfo.
@@ -199,19 +203,42 @@ where
     // EnvelopedData. These exact bytes are both digested by the signed
     // attributes and embedded as SignedData eContent.
 
-    let signer_info = build_two_pass_signer_info(
-        provider,
-        kdh_credential,
-        kdh_signing_key,
-        &encapsulated_content,
-        random_nonce,
-        key_block_header,
-    )?;
+    match policy.signed_attributes_order {
+        SignedAttributesOrder::Der => {
+            let signer_info = build_two_pass_signer_info(
+                provider,
+                kdh_credential,
+                kdh_signing_key,
+                &encapsulated_content,
+                random_nonce,
+                key_block_header,
+            )?;
 
-    let signed_data =
-        build_key_token_signed_data(&encapsulated_content, signer_info, Some(kdh_crl))?;
+            let signed_data =
+                build_key_token_signed_data(&encapsulated_content, signer_info, Some(kdh_crl))?;
 
-    Ok(wrap_signed_data(&signed_data)?)
+            Ok(wrap_signed_data(&signed_data)?)
+        }
+
+        SignedAttributesOrder::AnnexBSample => {
+            let signer_info_der = encode_annex_b_two_pass_signer_info(
+                provider,
+                kdh_credential,
+                kdh_signing_key,
+                &encapsulated_content,
+                random_nonce,
+                key_block_header,
+            )?;
+
+            let signed_data_der = encode_signed_data_with_signer_info_der(
+                &encapsulated_content,
+                &signer_info_der,
+                Some(kdh_crl),
+            )?;
+
+            Ok(wrap_signed_data_der(&signed_data_der)?)
+        }
+    }
 }
 
 /// Construct the CMS SignerInfo for a two-pass TR-34 key token.
@@ -253,6 +280,41 @@ where
     Ok(build_signer_info(
         kdh_credential,
         signed_attributes,
+        &signature,
+    )?)
+}
+
+/// Construct and encode the SignerInfo for the Annex B compatibility path.
+///
+/// The signature is calculated over the exact sample-ordered SignedAttributes
+/// encoding using the normal SET OF tag. The same attribute contents are then
+/// embedded in SignerInfo using the `[0] IMPLICIT` tag without passing through
+/// the canonical CMS SignedAttributes representation.
+pub(crate) fn encode_annex_b_two_pass_signer_info<P, K>(
+    provider: &P,
+    kdh_credential: &KdhCredential,
+    kdh_signing_key: &K,
+    encapsulated_content: &[u8],
+    random_nonce: &[u8],
+    key_block_header: &[u8],
+) -> Result<Vec<u8>, Tr34CryptoError<<P as CryptoProvider>::Error>>
+where
+    P: RsaPkcs1v15Sha256Sign<K>,
+    K: ?Sized,
+{
+    let signed_attributes = encode_annex_b_two_pass_signed_attributes(
+        encapsulated_content,
+        random_nonce,
+        key_block_header,
+    )?;
+
+    let signature = provider
+        .sign_pkcs1v15_sha256(kdh_signing_key, signed_attributes.signing_der())
+        .map_err(Tr34CryptoError::Crypto)?;
+
+    Ok(encode_signer_info_with_signed_attributes_der(
+        kdh_credential,
+        signed_attributes.signer_info_der(),
         &signature,
     )?)
 }

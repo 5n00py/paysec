@@ -1,23 +1,14 @@
-/// TR-34 encoding profile.
+/// Encoding profile used when producing TR-34 data.
 ///
-/// Profiles represent coherent interoperability behavior rather than
-/// individual ASN.1 or encoding switches.
-#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+/// `Strict` follows the normative ASN.1/CMS encoding used by this crate.
+///
+/// `AnnexB2019` reproduces the coherent compatibility conventions found in
+/// the TR-34 2019 Annex B samples where those conventions differ from the
+/// normative encoding.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 #[non_exhaustive]
 pub enum Tr34Profile {
-    /// Standards-oriented TR-34 encoding.
-    ///
-    /// This follows the normative TR-34 ASN.1 definitions and the
-    /// underlying CMS and PKCS specifications where informative examples
-    /// disagree with them.
-    #[default]
     Strict,
-
-    /// Compatibility profile for the encoding family demonstrated by
-    /// ASC X9 TR 34-2019 Annex B.
-    ///
-    /// Known cryptographic defects in published examples are not reproduced.
-    /// In particular, AES-CBC still uses a 16-byte IV.
     AnnexB2019,
 }
 
@@ -45,12 +36,24 @@ pub(crate) enum OaepParametersEncoding {
     AnnexBSample,
 }
 
-/// Internal encoding decisions associated with a public TR-34 profile.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum SignedAttributesOrder {
+    Der,
+    AnnexBSample,
+}
+
+/// Private decomposition of the public TR-34 encoding profiles.
+///
+/// Keeping the individual compatibility choices private allows public
+/// profiles to remain coherent while preventing callers from constructing
+/// arbitrary combinations of encoding quirks.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) struct EncodingPolicy {
     pub(crate) key_block_version: KeyBlockVersionEncoding,
     pub(crate) key_block_header: KeyBlockHeaderEncoding,
     pub(crate) encrypted_content_layout: EncryptedContentLayout,
     pub(crate) oaep_parameters: OaepParametersEncoding,
+    pub(crate) signed_attributes_order: SignedAttributesOrder,
 }
 
 impl EncodingPolicy {
@@ -61,6 +64,7 @@ impl EncodingPolicy {
                 key_block_header: KeyBlockHeaderEncoding::BareOctetString,
                 encrypted_content_layout: EncryptedContentLayout::Cms,
                 oaep_parameters: OaepParametersEncoding::Pkcs1,
+                signed_attributes_order: SignedAttributesOrder::Der,
             },
 
             Tr34Profile::AnnexB2019 => Self {
@@ -68,6 +72,7 @@ impl EncodingPolicy {
                 key_block_header: KeyBlockHeaderEncoding::DataAttribute,
                 encrypted_content_layout: EncryptedContentLayout::AnnexB2019,
                 oaep_parameters: OaepParametersEncoding::AnnexBSample,
+                signed_attributes_order: SignedAttributesOrder::AnnexBSample,
             },
         }
     }
@@ -87,6 +92,12 @@ mod tests {
             policy.key_block_header,
             KeyBlockHeaderEncoding::BareOctetString,
         );
+
+        assert_eq!(policy.encrypted_content_layout, EncryptedContentLayout::Cms,);
+
+        assert_eq!(policy.oaep_parameters, OaepParametersEncoding::Pkcs1,);
+
+        assert_eq!(policy.signed_attributes_order, SignedAttributesOrder::Der,);
     }
 
     #[test]
@@ -101,6 +112,18 @@ mod tests {
         assert_eq!(
             policy.key_block_header,
             KeyBlockHeaderEncoding::DataAttribute,
+        );
+
+        assert_eq!(
+            policy.encrypted_content_layout,
+            EncryptedContentLayout::AnnexB2019,
+        );
+
+        assert_eq!(policy.oaep_parameters, OaepParametersEncoding::AnnexBSample,);
+
+        assert_eq!(
+            policy.signed_attributes_order,
+            SignedAttributesOrder::AnnexBSample,
         );
     }
 }
