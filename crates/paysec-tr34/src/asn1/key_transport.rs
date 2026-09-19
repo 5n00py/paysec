@@ -2,7 +2,7 @@ use cms::content_info::CmsVersion;
 use cms::enveloped_data::{EncryptedKey, KeyTransRecipientInfo};
 
 use der::asn1::Any;
-use der::{Decode, Encode};
+use der::{Decode, Encode, Sequence};
 
 use pkcs1::RsaOaepParams;
 
@@ -10,27 +10,84 @@ use sha2::Sha256;
 
 use spki::AlgorithmIdentifierOwned;
 
-use crate::oid::RSAES_OAEP;
+use crate::oid::{ID_SHA_256, MGF1, P_SPECIFIED, RSAES_OAEP};
+use crate::profile::OaepParametersEncoding;
 use crate::{KrdCredential, Tr34Error};
+
+/// Annex B representation of RSAES-OAEP parameters.
+///
+/// Unlike PKCS #1 RSAES-OAEP-params, the published samples encode the
+/// three component AlgorithmIdentifiers directly inside a SEQUENCE rather
+/// than using the [0], [1], and [2] context-specific fields.
+#[derive(Clone, Debug, Eq, PartialEq, Sequence)]
+struct AnnexBOaepParameters {
+    hash_algorithm: AlgorithmIdentifierOwned,
+    mask_gen_algorithm: AlgorithmIdentifierOwned,
+    p_source_algorithm: AlgorithmIdentifierOwned,
+}
 
 /// Construct the RSAES-OAEP AlgorithmIdentifier required by TR-34.
 ///
-/// The profile is fixed to:
+/// Both encodings describe the same cryptographic operation:
 ///
 /// - SHA-256
 /// - MGF1 with SHA-256
 /// - empty label
 ///
-/// `RsaOaepParams` performs canonical DER encoding of the PKCS #1
-/// RSAES-OAEP parameters.
-pub(crate) fn rsa_oaep_sha256_algorithm_identifier() -> Result<AlgorithmIdentifierOwned, Tr34Error>
-{
-    let parameters = RsaOaepParams::new::<Sha256>().to_der()?;
+/// Only the ASN.1 representation of the parameters differs.
+pub(crate) fn rsa_oaep_sha256_algorithm_identifier(
+    encoding: OaepParametersEncoding,
+) -> Result<AlgorithmIdentifierOwned, Tr34Error> {
+    let parameters = match encoding {
+        OaepParametersEncoding::Pkcs1 => {
+            let parameters = RsaOaepParams::new::<Sha256>().to_der()?;
+
+            Any::from_der(&parameters)?
+        }
+
+        OaepParametersEncoding::AnnexBSample => annex_b_oaep_parameters()?,
+    };
 
     Ok(AlgorithmIdentifierOwned {
         oid: RSAES_OAEP,
-        parameters: Some(Any::from_der(&parameters)?),
+        parameters: Some(parameters),
     })
+}
+
+fn annex_b_oaep_parameters() -> Result<Any, Tr34Error> {
+    let null = Any::from_der(&[0x05, 0x00])?;
+
+    let empty_octet_string = Any::from_der(&[0x04, 0x00])?;
+
+    // Annex B encodes the top-level SHA-256 AlgorithmIdentifier with NULL.
+    let hash_algorithm = AlgorithmIdentifierOwned {
+        oid: ID_SHA_256,
+        parameters: Some(null),
+    };
+
+    // Inside MGF1, the sample encodes SHA-256 without parameters.
+    let mgf_hash_algorithm = AlgorithmIdentifierOwned {
+        oid: ID_SHA_256,
+        parameters: None,
+    };
+
+    let mask_gen_algorithm = AlgorithmIdentifierOwned {
+        oid: MGF1,
+        parameters: Some(Any::encode_from(&mgf_hash_algorithm)?),
+    };
+
+    let p_source_algorithm = AlgorithmIdentifierOwned {
+        oid: P_SPECIFIED,
+        parameters: Some(empty_octet_string),
+    };
+
+    let parameters = AnnexBOaepParameters {
+        hash_algorithm,
+        mask_gen_algorithm,
+        p_source_algorithm,
+    };
+
+    Ok(Any::encode_from(&parameters)?)
 }
 
 /// Construct the CMS KeyTransRecipientInfo for a TR-34 KRD.
@@ -44,11 +101,12 @@ pub(crate) fn rsa_oaep_sha256_algorithm_identifier() -> Result<AlgorithmIdentifi
 pub(crate) fn build_key_transport_recipient_info(
     krd_credential: &KrdCredential,
     encrypted_key: &[u8],
+    oaep_parameters: OaepParametersEncoding,
 ) -> Result<KeyTransRecipientInfo, Tr34Error> {
     Ok(KeyTransRecipientInfo {
         version: CmsVersion::V0,
         rid: krd_credential.recipient_identifier(),
-        key_enc_alg: rsa_oaep_sha256_algorithm_identifier()?,
+        key_enc_alg: rsa_oaep_sha256_algorithm_identifier(oaep_parameters)?,
         enc_key: EncryptedKey::new(encrypted_key.to_vec())?,
     })
 }
@@ -116,7 +174,8 @@ mod tests {
 
     #[test]
     fn oaep_algorithm_identifier_uses_sha256_and_mgf1_sha256() {
-        let algorithm = rsa_oaep_sha256_algorithm_identifier().unwrap();
+        let algorithm =
+            rsa_oaep_sha256_algorithm_identifier(OaepParametersEncoding::Pkcs1).unwrap();
 
         let encoded = algorithm.to_der().unwrap();
 
@@ -146,8 +205,12 @@ mod tests {
 
         let encrypted_key = vec![0xAA; 256];
 
-        let recipient_info =
-            build_key_transport_recipient_info(&credential, &encrypted_key).unwrap();
+        let recipient_info = build_key_transport_recipient_info(
+            &credential,
+            &encrypted_key,
+            OaepParametersEncoding::Pkcs1,
+        )
+        .unwrap();
 
         assert_eq!(recipient_info.version, CmsVersion::V0);
 
@@ -167,8 +230,12 @@ mod tests {
 
         let encrypted_key = vec![0xAA; 256];
 
-        let recipient_info =
-            build_key_transport_recipient_info(&credential, &encrypted_key).unwrap();
+        let recipient_info = build_key_transport_recipient_info(
+            &credential,
+            &encrypted_key,
+            OaepParametersEncoding::Pkcs1,
+        )
+        .unwrap();
 
         let encoded = recipient_info.to_der().unwrap();
 
@@ -205,8 +272,12 @@ mod tests {
 
         assert_eq!(encrypted_key.len(), 256);
 
-        let recipient_info =
-            build_key_transport_recipient_info(&credential, &encrypted_key).unwrap();
+        let recipient_info = build_key_transport_recipient_info(
+            &credential,
+            &encrypted_key,
+            OaepParametersEncoding::Pkcs1,
+        )
+        .unwrap();
 
         assert_eq!(recipient_info.enc_key.as_bytes(), encrypted_key.as_slice());
 
@@ -239,10 +310,46 @@ mod tests {
 
         assert_eq!(encrypted_a, encrypted_b);
 
-        let ktri_a = build_key_transport_recipient_info(&credential, &encrypted_a).unwrap();
+        let ktri_a = build_key_transport_recipient_info(
+            &credential,
+            &encrypted_a,
+            OaepParametersEncoding::Pkcs1,
+        )
+        .unwrap();
 
-        let ktri_b = build_key_transport_recipient_info(&credential, &encrypted_b).unwrap();
-
+        let ktri_b = build_key_transport_recipient_info(
+            &credential,
+            &encrypted_b,
+            OaepParametersEncoding::Pkcs1,
+        )
+        .unwrap();
         assert_eq!(ktri_a.to_der().unwrap(), ktri_b.to_der().unwrap());
+    }
+
+    #[test]
+    fn annex_b_oaep_algorithm_identifier_uses_sample_parameter_encoding() {
+        let algorithm =
+            rsa_oaep_sha256_algorithm_identifier(OaepParametersEncoding::AnnexBSample).unwrap();
+
+        let encoded = algorithm.to_der().unwrap();
+
+        let expected = hex::decode(concat!(
+            "3045",
+            "06092A864886F70D010107",
+            "3038",
+            "300D",
+            "0609608648016503040201",
+            "0500",
+            "3018",
+            "06092A864886F70D010108",
+            "300B",
+            "0609608648016503040201",
+            "300D",
+            "06092A864886F70D010109",
+            "0400",
+        ))
+        .unwrap();
+
+        assert_eq!(encoded, expected,);
     }
 }

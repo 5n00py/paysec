@@ -12,6 +12,7 @@ use spki::{AlgorithmIdentifierOwned, ObjectIdentifier};
 use crate::asn1::key_block::KeyBlock;
 use crate::asn1::key_transport::build_key_transport_recipient_info;
 use crate::oid::{ID_AES_128_CBC, ID_DATA};
+use crate::profile::OaepParametersEncoding;
 use crate::profile::{KeyBlockHeaderEncoding, KeyBlockVersionEncoding};
 use crate::{KdhCredential, KrdCredential, Tr34Error};
 
@@ -115,9 +116,13 @@ pub(crate) fn build_enveloped_data(
     encrypted_ephemeral_key: &[u8],
     iv: &[u8; AES_BLOCK_SIZE],
     encrypted_key_block: &[u8],
+    oaep_parameters: OaepParametersEncoding,
 ) -> Result<EnvelopedData, Tr34Error> {
-    let recipient_info =
-        build_key_transport_recipient_info(krd_credential, encrypted_ephemeral_key)?;
+    let recipient_info = build_key_transport_recipient_info(
+        krd_credential,
+        encrypted_ephemeral_key,
+        oaep_parameters,
+    )?;
 
     let recip_infos = RecipientInfos::try_from(vec![RecipientInfo::Ktri(recipient_info)])?;
 
@@ -139,9 +144,13 @@ pub(crate) fn encode_annex_b_enveloped_data(
     encrypted_ephemeral_key: &[u8],
     iv: &[u8; AES_BLOCK_SIZE],
     encrypted_key_block: &[u8],
+    oaep_parameters: OaepParametersEncoding,
 ) -> Result<Vec<u8>, Tr34Error> {
-    let recipient_info =
-        build_key_transport_recipient_info(krd_credential, encrypted_ephemeral_key)?;
+    let recipient_info = build_key_transport_recipient_info(
+        krd_credential,
+        encrypted_ephemeral_key,
+        oaep_parameters,
+    )?;
 
     let recip_infos = RecipientInfos::try_from(vec![RecipientInfo::Ktri(recipient_info)])?;
 
@@ -316,6 +325,7 @@ mod tests {
             &encrypted_ephemeral_key,
             &iv,
             &encrypted_key_block,
+            OaepParametersEncoding::Pkcs1,
         )
         .unwrap();
 
@@ -400,6 +410,7 @@ mod tests {
             &encrypted_ephemeral_key,
             &iv,
             &encrypted_key_block,
+            OaepParametersEncoding::AnnexBSample,
         )
         .unwrap();
 

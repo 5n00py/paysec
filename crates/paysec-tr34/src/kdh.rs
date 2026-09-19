@@ -139,6 +139,7 @@ where
             &encrypted_ephemeral_key,
             &iv,
             &encrypted_key_block,
+            policy.oaep_parameters,
         )?
         .to_der()
         .map_err(Tr34Error::from)?,
@@ -148,6 +149,7 @@ where
             &encrypted_ephemeral_key,
             &iv,
             &encrypted_key_block,
+            policy.oaep_parameters,
         )?,
     };
 

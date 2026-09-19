@@ -39,11 +39,18 @@ pub(crate) enum EncryptedContentLayout {
     AnnexB2019,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum OaepParametersEncoding {
+    Pkcs1,
+    AnnexBSample,
+}
+
 /// Internal encoding decisions associated with a public TR-34 profile.
 pub(crate) struct EncodingPolicy {
     pub(crate) key_block_version: KeyBlockVersionEncoding,
     pub(crate) key_block_header: KeyBlockHeaderEncoding,
     pub(crate) encrypted_content_layout: EncryptedContentLayout,
+    pub(crate) oaep_parameters: OaepParametersEncoding,
 }
 
 impl EncodingPolicy {
@@ -53,12 +60,14 @@ impl EncodingPolicy {
                 key_block_version: KeyBlockVersionEncoding::AnnexD,
                 key_block_header: KeyBlockHeaderEncoding::BareOctetString,
                 encrypted_content_layout: EncryptedContentLayout::Cms,
+                oaep_parameters: OaepParametersEncoding::Pkcs1,
             },
 
             Tr34Profile::AnnexB2019 => Self {
                 key_block_version: KeyBlockVersionEncoding::AnnexBSample,
                 key_block_header: KeyBlockHeaderEncoding::DataAttribute,
                 encrypted_content_layout: EncryptedContentLayout::AnnexB2019,
+                oaep_parameters: OaepParametersEncoding::AnnexBSample,
             },
         }
     }

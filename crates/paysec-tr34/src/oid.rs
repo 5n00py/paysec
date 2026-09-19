@@ -28,3 +28,8 @@ pub(crate) const ID_SHA_256: ObjectIdentifier =
 
 pub(crate) const ID_AES_128_CBC: ObjectIdentifier =
     ObjectIdentifier::new_unwrap("2.16.840.1.101.3.4.1.2");
+
+pub(crate) const MGF1: ObjectIdentifier = ObjectIdentifier::new_unwrap("1.2.840.113549.1.1.8");
+
+pub(crate) const P_SPECIFIED: ObjectIdentifier =
+    ObjectIdentifier::new_unwrap("1.2.840.113549.1.1.9");
