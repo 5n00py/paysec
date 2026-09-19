@@ -33,11 +33,17 @@ pub(crate) enum KeyBlockHeaderEncoding {
     DataAttribute,
 }
 
-/// Internal encoding decisions associated with a public TR-34 profile.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum EncryptedContentLayout {
+    Cms,
+    AnnexB2019,
+}
+
+/// Internal encoding decisions associated with a public TR-34 profile.
 pub(crate) struct EncodingPolicy {
     pub(crate) key_block_version: KeyBlockVersionEncoding,
     pub(crate) key_block_header: KeyBlockHeaderEncoding,
+    pub(crate) encrypted_content_layout: EncryptedContentLayout,
 }
 
 impl EncodingPolicy {
@@ -46,11 +52,13 @@ impl EncodingPolicy {
             Tr34Profile::Strict => Self {
                 key_block_version: KeyBlockVersionEncoding::AnnexD,
                 key_block_header: KeyBlockHeaderEncoding::BareOctetString,
+                encrypted_content_layout: EncryptedContentLayout::Cms,
             },
 
             Tr34Profile::AnnexB2019 => Self {
                 key_block_version: KeyBlockVersionEncoding::AnnexBSample,
                 key_block_header: KeyBlockHeaderEncoding::DataAttribute,
+                encrypted_content_layout: EncryptedContentLayout::AnnexB2019,
             },
         }
     }

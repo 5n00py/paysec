@@ -1,4 +1,3 @@
-use cms::enveloped_data::EnvelopedData;
 use cms::signed_data::SignerInfo;
 
 use paysec_crypto::{
@@ -15,15 +14,17 @@ use crate::asn1::signed_data::{build_key_token_signed_data, wrap_signed_data};
 
 use crate::{KdhCredential, KdhCrl, KrdCredential, Tr34CryptoError, Tr34Error, Tr34Profile};
 
-use crate::asn1::enveloped_data::{build_enveloped_data, encode_padded_key_block};
-
 use crate::asn1::signed_attributes::{
     build_two_pass_signed_attributes, signed_attributes_signing_der,
 };
 
 use crate::asn1::signer_info::build_signer_info;
 
-use crate::profile::EncodingPolicy;
+use crate::asn1::enveloped_data::{
+    build_enveloped_data, encode_annex_b_enveloped_data, encode_padded_key_block,
+};
+
+use crate::profile::{EncodingPolicy, EncryptedContentLayout};
 
 const AES_128_KEY_LENGTH: usize = 16;
 const AES_CBC_IV_LENGTH: usize = 16;
@@ -86,18 +87,12 @@ impl<'a> TwoPassKeyExportRequest<'a> {
     }
 }
 
-/// Construct the encrypted inner TR-34 key block.
+/// Construct and encode the encrypted inner TR-34 key block.
 ///
-/// This function performs the KDH-side cryptographic operations required to
-/// produce the inner CMS EnvelopedData:
-///
-/// 1. Encode and pad the TR-34 KeyBlock.
-/// 2. Generate the ephemeral AES-128 key KE.
-/// 3. Generate the AES-CBC initialization vector.
-/// 4. Encrypt the padded KeyBlock under KE.
-/// 5. Encrypt KE under the KRD public key using RSAES-OAEP-SHA256.
-/// 6. Construct the CMS EnvelopedData.
-pub(crate) fn build_enveloped_key_block<P, K>(
+/// The returned bytes are the authoritative EnvelopedData encoding that
+/// will later be both digested by SignedAttributes and embedded as
+/// SignedData eContent.
+pub(crate) fn encode_enveloped_key_block<P, K>(
     provider: &mut P,
     kdh_credential: &KdhCredential,
     krd_credential: &KrdCredential,
@@ -105,7 +100,7 @@ pub(crate) fn build_enveloped_key_block<P, K>(
     clear_key: &[u8],
     key_block_header: &[u8],
     policy: EncodingPolicy,
-) -> Result<EnvelopedData, Tr34CryptoError<<P as CryptoProvider>::Error>>
+) -> Result<Vec<u8>, Tr34CryptoError<<P as CryptoProvider>::Error>>
 where
     P: RandomBytes + AesCbc<[u8]> + RsaOaepSha256Encrypt<K>,
     K: ?Sized,
@@ -138,12 +133,25 @@ where
         .encrypt_oaep_sha256(krd_public_key, &ephemeral_key[..])
         .map_err(Tr34CryptoError::Crypto)?;
 
-    Ok(build_enveloped_data(
-        krd_credential,
-        &encrypted_ephemeral_key,
-        &iv,
-        &encrypted_key_block,
-    )?)
+    let encoded = match policy.encrypted_content_layout {
+        EncryptedContentLayout::Cms => build_enveloped_data(
+            krd_credential,
+            &encrypted_ephemeral_key,
+            &iv,
+            &encrypted_key_block,
+        )?
+        .to_der()
+        .map_err(Tr34Error::from)?,
+
+        EncryptedContentLayout::AnnexB2019 => encode_annex_b_enveloped_data(
+            krd_credential,
+            &encrypted_ephemeral_key,
+            &iv,
+            &encrypted_key_block,
+        )?,
+    };
+
+    Ok(encoded)
 }
 
 /// Construct a complete two-pass TR-34 KDH key token.
@@ -175,7 +183,7 @@ where
     KrdKey: ?Sized,
     KdhKey: ?Sized,
 {
-    let enveloped_data = build_enveloped_key_block(
+    let encapsulated_content = encode_enveloped_key_block(
         provider,
         kdh_credential,
         krd_credential,
@@ -188,7 +196,6 @@ where
     // This is the single authoritative encoding of the inner
     // EnvelopedData. These exact bytes are both digested by the signed
     // attributes and embedded as SignedData eContent.
-    let encapsulated_content = enveloped_data.to_der().map_err(Tr34Error::from)?;
 
     let signer_info = build_two_pass_signer_info(
         provider,
@@ -475,7 +482,7 @@ mod tests {
 
         let mut provider = RustCryptoProvider::with_rng(deterministic_rng());
 
-        let enveloped_data = build_enveloped_key_block(
+        let encoded = encode_enveloped_key_block(
             &mut provider,
             &kdh_credential,
             &krd_credential,
@@ -485,6 +492,8 @@ mod tests {
             EncodingPolicy::for_profile(Tr34Profile::Strict),
         )
         .unwrap();
+
+        let enveloped_data = cms::enveloped_data::EnvelopedData::from_der(&encoded).unwrap();
 
         assert_eq!(enveloped_data.version, cms::content_info::CmsVersion::V0);
 
@@ -539,7 +548,7 @@ mod tests {
 
         let mut provider_b = RustCryptoProvider::with_rng(deterministic_rng());
 
-        let enveloped_a = build_enveloped_key_block(
+        let encoded_a = encode_enveloped_key_block(
             &mut provider_a,
             &kdh_credential,
             &krd_credential,
@@ -550,7 +559,7 @@ mod tests {
         )
         .unwrap();
 
-        let enveloped_b = build_enveloped_key_block(
+        let encoded_b = encode_enveloped_key_block(
             &mut provider_b,
             &kdh_credential,
             &krd_credential,
@@ -561,7 +570,7 @@ mod tests {
         )
         .unwrap();
 
-        assert_eq!(enveloped_a.to_der().unwrap(), enveloped_b.to_der().unwrap(),);
+        assert_eq!(encoded_a, encoded_b,);
     }
 
     #[test]
@@ -584,7 +593,7 @@ mod tests {
 
         let mut provider = RustCryptoProvider::with_rng(deterministic_rng());
 
-        let enveloped_data = build_enveloped_key_block(
+        let encapsulated_content = encode_enveloped_key_block(
             &mut provider,
             &kdh_credential,
             &krd_credential,
@@ -594,9 +603,6 @@ mod tests {
             EncodingPolicy::for_profile(Tr34Profile::Strict),
         )
         .unwrap();
-
-        // These exact bytes later become the outer SignedData eContent.
-        let encapsulated_content = enveloped_data.to_der().unwrap();
 
         let signer_info = build_two_pass_signer_info(
             &provider,
@@ -845,8 +851,34 @@ mod tests {
             b"0123456789ABCDEF",
             &kdh_crl,
         )
-        .with_profile(Tr34Profile::Strict);
+        .with_profile(Tr34Profile::AnnexB2019);
 
-        assert_eq!(request.profile, Tr34Profile::Strict,);
+        assert_eq!(request.profile, Tr34Profile::AnnexB2019,);
+    }
+
+    #[test]
+    fn annex_b_profile_uses_compatibility_enveloped_data_layout() {
+        let kdh_credential = KdhCredential::from_der(KDH_CERTIFICATE_DER).unwrap();
+
+        let krd_credential = KrdCredential::from_der(KRD_CERTIFICATE_DER).unwrap();
+
+        let public_key = krd_public_key(&krd_credential);
+
+        let clear_key = hex::decode("0123456789ABCDEFFEDCBA9876543210").unwrap();
+
+        let mut provider = RustCryptoProvider::with_rng(deterministic_rng());
+
+        let encoded = encode_enveloped_key_block(
+            &mut provider,
+            &kdh_credential,
+            &krd_credential,
+            &public_key,
+            &clear_key,
+            b"A0256K0TB00E0000",
+            EncodingPolicy::for_profile(Tr34Profile::AnnexB2019),
+        )
+        .unwrap();
+
+        assert!(cms::enveloped_data::EnvelopedData::from_der(&encoded,).is_err(),);
     }
 }

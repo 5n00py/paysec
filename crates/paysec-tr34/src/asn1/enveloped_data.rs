@@ -3,9 +3,11 @@ use cms::enveloped_data::{EncryptedContentInfo, EnvelopedData, RecipientInfo, Re
 
 use der::asn1::{Any, OctetString};
 
-use spki::AlgorithmIdentifierOwned;
-
 use zeroize::Zeroizing;
+
+use der::{Encode, Sequence};
+
+use spki::{AlgorithmIdentifierOwned, ObjectIdentifier};
 
 use crate::asn1::key_block::KeyBlock;
 use crate::asn1::key_transport::build_key_transport_recipient_info;
@@ -14,6 +16,33 @@ use crate::profile::{KeyBlockHeaderEncoding, KeyBlockVersionEncoding};
 use crate::{KdhCredential, KrdCredential, Tr34Error};
 
 const AES_BLOCK_SIZE: usize = 16;
+
+/// Annex B 2019 compatibility representation of EnvelopedData.
+///
+/// The informative examples place `encryptedContent` inside the
+/// content-encryption SEQUENCE rather than as a sibling field in
+/// CMS EncryptedContentInfo.
+#[derive(Clone, Debug, Eq, PartialEq, Sequence)]
+struct AnnexBEnvelopedData {
+    version: CmsVersion,
+    recip_infos: RecipientInfos,
+    encrypted_content: AnnexBEncryptedContentInfo,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Sequence)]
+struct AnnexBEncryptedContentInfo {
+    content_type: ObjectIdentifier,
+    content_enc_alg: AnnexBContentEncryptionAlgorithm,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Sequence)]
+struct AnnexBContentEncryptionAlgorithm {
+    algorithm: ObjectIdentifier,
+    iv: OctetString,
+
+    #[asn1(context_specific = "0", tag_mode = "IMPLICIT")]
+    encrypted_content: OctetString,
+}
 
 /// Encode a TR-34 KeyBlock using the selected internal encoding and apply
 /// the CMS content-encryption padding required before AES-CBC encryption.
@@ -99,6 +128,42 @@ pub(crate) fn build_enveloped_data(
         encrypted_content: build_encrypted_content_info(iv, encrypted_key_block)?,
         unprotected_attrs: None,
     })
+}
+
+/// Encode the Annex B 2019 EnvelopedData compatibility layout.
+///
+/// This intentionally models only the structural EncryptedContent placement
+/// difference. AES-CBC still uses a complete 16-byte IV.
+pub(crate) fn encode_annex_b_enveloped_data(
+    krd_credential: &KrdCredential,
+    encrypted_ephemeral_key: &[u8],
+    iv: &[u8; AES_BLOCK_SIZE],
+    encrypted_key_block: &[u8],
+) -> Result<Vec<u8>, Tr34Error> {
+    let recipient_info =
+        build_key_transport_recipient_info(krd_credential, encrypted_ephemeral_key)?;
+
+    let recip_infos = RecipientInfos::try_from(vec![RecipientInfo::Ktri(recipient_info)])?;
+
+    let enveloped_data = AnnexBEnvelopedData {
+        version: CmsVersion::V0,
+
+        recip_infos,
+
+        encrypted_content: AnnexBEncryptedContentInfo {
+            content_type: ID_DATA,
+
+            content_enc_alg: AnnexBContentEncryptionAlgorithm {
+                algorithm: ID_AES_128_CBC,
+
+                iv: OctetString::new(iv.to_vec())?,
+
+                encrypted_content: OctetString::new(encrypted_key_block.to_vec())?,
+            },
+        },
+    };
+
+    Ok(enveloped_data.to_der()?)
 }
 
 #[cfg(test)]
@@ -315,5 +380,56 @@ mod tests {
         assert_eq!(padded.len(), 144,);
 
         assert_eq!(&padded[133..], &[0x0B; 11],);
+    }
+
+    #[test]
+    fn annex_b_enveloped_data_nests_encrypted_content_with_full_aes_iv() {
+        let krd_credential = KrdCredential::from_der(KRD_CERTIFICATE_DER).unwrap();
+
+        let encrypted_ephemeral_key = vec![0xAA; 256];
+
+        let iv = [
+            0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D,
+            0x0E, 0x0F,
+        ];
+
+        let encrypted_key_block = vec![0xBB; 144];
+
+        let encoded = encode_annex_b_enveloped_data(
+            &krd_credential,
+            &encrypted_ephemeral_key,
+            &iv,
+            &encrypted_key_block,
+        )
+        .unwrap();
+
+        // The Annex B layout is intentionally not normal CMS
+        // EncryptedContentInfo.
+        assert!(EnvelopedData::from_der(&encoded,).is_err(),);
+
+        let decoded = AnnexBEnvelopedData::from_der(&encoded).unwrap();
+
+        assert_eq!(decoded.version, CmsVersion::V0,);
+
+        assert_eq!(decoded.encrypted_content.content_type, ID_DATA,);
+
+        assert_eq!(
+            decoded.encrypted_content.content_enc_alg.algorithm,
+            ID_AES_128_CBC,
+        );
+
+        assert_eq!(
+            decoded.encrypted_content.content_enc_alg.iv.as_bytes(),
+            iv.as_slice(),
+        );
+
+        assert_eq!(
+            decoded
+                .encrypted_content
+                .content_enc_alg
+                .encrypted_content
+                .as_bytes(),
+            encrypted_key_block.as_slice(),
+        );
     }
 }
