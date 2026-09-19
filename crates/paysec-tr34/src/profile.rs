@@ -42,6 +42,12 @@ pub(crate) enum SignedAttributesOrder {
     AnnexBSample,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum SignatureAlgorithmEncoding {
+    Sha256WithRsaEncryption,
+    RsaEncryption,
+}
+
 /// Private decomposition of the public TR-34 encoding profiles.
 ///
 /// Keeping the individual compatibility choices private allows public
@@ -54,6 +60,7 @@ pub(crate) struct EncodingPolicy {
     pub(crate) encrypted_content_layout: EncryptedContentLayout,
     pub(crate) oaep_parameters: OaepParametersEncoding,
     pub(crate) signed_attributes_order: SignedAttributesOrder,
+    pub(crate) signature_algorithm: SignatureAlgorithmEncoding,
 }
 
 impl EncodingPolicy {
@@ -65,6 +72,7 @@ impl EncodingPolicy {
                 encrypted_content_layout: EncryptedContentLayout::Cms,
                 oaep_parameters: OaepParametersEncoding::Pkcs1,
                 signed_attributes_order: SignedAttributesOrder::Der,
+                signature_algorithm: SignatureAlgorithmEncoding::Sha256WithRsaEncryption,
             },
 
             Tr34Profile::AnnexB2019 => Self {
@@ -73,6 +81,7 @@ impl EncodingPolicy {
                 encrypted_content_layout: EncryptedContentLayout::AnnexB2019,
                 oaep_parameters: OaepParametersEncoding::AnnexBSample,
                 signed_attributes_order: SignedAttributesOrder::AnnexBSample,
+                signature_algorithm: SignatureAlgorithmEncoding::RsaEncryption,
             },
         }
     }
@@ -98,6 +107,11 @@ mod tests {
         assert_eq!(policy.oaep_parameters, OaepParametersEncoding::Pkcs1,);
 
         assert_eq!(policy.signed_attributes_order, SignedAttributesOrder::Der,);
+
+        assert_eq!(
+            policy.signature_algorithm,
+            SignatureAlgorithmEncoding::Sha256WithRsaEncryption,
+        );
     }
 
     #[test]

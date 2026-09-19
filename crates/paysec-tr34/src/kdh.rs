@@ -28,7 +28,9 @@ use crate::asn1::signed_data::{
 
 use crate::asn1::signer_info::{build_signer_info, encode_signer_info_with_signed_attributes_der};
 
-use crate::profile::{EncodingPolicy, EncryptedContentLayout, SignedAttributesOrder};
+use crate::profile::{
+    EncodingPolicy, EncryptedContentLayout, SignatureAlgorithmEncoding, SignedAttributesOrder,
+};
 
 const AES_128_KEY_LENGTH: usize = 16;
 const AES_CBC_IV_LENGTH: usize = 16;
@@ -228,6 +230,7 @@ where
                 &encapsulated_content,
                 random_nonce,
                 key_block_header,
+                policy.signature_algorithm,
             )?;
 
             let signed_data_der = encode_signed_data_with_signer_info_der(
@@ -297,6 +300,7 @@ pub(crate) fn encode_annex_b_two_pass_signer_info<P, K>(
     encapsulated_content: &[u8],
     random_nonce: &[u8],
     key_block_header: &[u8],
+    signature_algorithm: SignatureAlgorithmEncoding,
 ) -> Result<Vec<u8>, Tr34CryptoError<<P as CryptoProvider>::Error>>
 where
     P: RsaPkcs1v15Sha256Sign<K>,
@@ -316,6 +320,7 @@ where
         kdh_credential,
         signed_attributes.signer_info_der(),
         &signature,
+        signature_algorithm,
     )?)
 }
 

@@ -7,8 +7,22 @@ use der::asn1::Any;
 use spki::AlgorithmIdentifierOwned;
 
 use crate::asn1::signed_attributes::encode_constructed;
-use crate::oid::{ID_SHA_256, SHA256_WITH_RSA_ENCRYPTION};
+use crate::oid::{ID_SHA_256, RSA_ENCRYPTION, SHA256_WITH_RSA_ENCRYPTION};
+
+use crate::profile::SignatureAlgorithmEncoding;
 use crate::{KdhCredential, Tr34Error};
+
+fn signature_algorithm_identifier(
+    encoding: SignatureAlgorithmEncoding,
+) -> AlgorithmIdentifierOwned {
+    match encoding {
+        SignatureAlgorithmEncoding::Sha256WithRsaEncryption => {
+            sha256_with_rsa_encryption_algorithm_identifier()
+        }
+
+        SignatureAlgorithmEncoding::RsaEncryption => rsa_encryption_algorithm_identifier(),
+    }
+}
 
 /// SHA-256 AlgorithmIdentifier used by TR-34.
 ///
@@ -17,6 +31,18 @@ pub(crate) fn sha256_algorithm_identifier() -> AlgorithmIdentifierOwned {
     AlgorithmIdentifierOwned {
         oid: ID_SHA_256,
         parameters: None,
+    }
+}
+
+/// rsaEncryption AlgorithmIdentifier used by the Annex B compatibility
+/// representation of SignerInfo.
+///
+/// The actual signature operation remains RSA PKCS#1 v1.5 with SHA-256.
+/// This function controls only the AlgorithmIdentifier written on the wire.
+pub(crate) fn rsa_encryption_algorithm_identifier() -> AlgorithmIdentifierOwned {
+    AlgorithmIdentifierOwned {
+        oid: RSA_ENCRYPTION,
+        parameters: Some(Any::null()),
     }
 }
 
@@ -74,6 +100,7 @@ pub(crate) fn encode_signer_info_with_signed_attributes_der(
     kdh_credential: &KdhCredential,
     signed_attributes_der: &[u8],
     signature: &[u8],
+    signature_algorithm: SignatureAlgorithmEncoding,
 ) -> Result<Vec<u8>, Tr34Error> {
     debug_assert_eq!(signed_attributes_der.first(), Some(&0xA0),);
 
@@ -90,7 +117,7 @@ pub(crate) fn encode_signer_info_with_signed_attributes_der(
 
     content.extend_from_slice(signed_attributes_der);
 
-    content.extend_from_slice(&sha256_with_rsa_encryption_algorithm_identifier().to_der()?);
+    content.extend_from_slice(&signature_algorithm_identifier(signature_algorithm).to_der()?);
 
     content.extend_from_slice(&SignatureValue::new(signature.to_vec())?.to_der()?);
 
@@ -242,9 +269,58 @@ mod tests {
             &credential,
             &signed_attributes_der,
             &signature,
+            SignatureAlgorithmEncoding::Sha256WithRsaEncryption,
         )
         .unwrap();
 
         assert_eq!(actual, expected,);
+    }
+
+    #[test]
+    fn rsa_encryption_algorithm_identifier_has_null_parameters() {
+        let algorithm = rsa_encryption_algorithm_identifier();
+
+        let encoded = algorithm.to_der().unwrap();
+
+        let expected = hex::decode(
+            "300D\
+             06092A864886F70D010101\
+             0500",
+        )
+        .unwrap();
+
+        assert_eq!(encoded, expected,);
+    }
+
+    #[test]
+    fn raw_signer_info_can_encode_rsa_encryption_signature_algorithm() {
+        let credential = KdhCredential::from_der(KDH_CERTIFICATE_DER).unwrap();
+
+        let signed_attributes = build_two_pass_signed_attributes(
+            b"encapsulated content",
+            b"nonce",
+            b"A0256K0TB00E0000",
+        )
+        .unwrap();
+
+        let mut signed_attributes_der = signed_attributes_signing_der(&signed_attributes).unwrap();
+
+        signed_attributes_der[0] = 0xA0;
+
+        let encoded = encode_signer_info_with_signed_attributes_der(
+            &credential,
+            &signed_attributes_der,
+            &[0xAA; 256],
+            SignatureAlgorithmEncoding::RsaEncryption,
+        )
+        .unwrap();
+
+        let rsa_encryption = rsa_encryption_algorithm_identifier().to_der().unwrap();
+
+        assert!(
+            encoded
+                .windows(rsa_encryption.len())
+                .any(|window| window == rsa_encryption),
+        );
     }
 }

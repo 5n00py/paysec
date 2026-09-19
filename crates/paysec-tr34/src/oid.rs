@@ -33,3 +33,6 @@ pub(crate) const MGF1: ObjectIdentifier = ObjectIdentifier::new_unwrap("1.2.840.
 
 pub(crate) const P_SPECIFIED: ObjectIdentifier =
     ObjectIdentifier::new_unwrap("1.2.840.113549.1.1.9");
+
+pub(crate) const RSA_ENCRYPTION: ObjectIdentifier =
+    ObjectIdentifier::new_unwrap("1.2.840.113549.1.1.1");
