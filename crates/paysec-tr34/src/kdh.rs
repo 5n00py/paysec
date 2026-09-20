@@ -328,9 +328,11 @@ where
 /// Export a key using the selected two-pass TR-34 encoding profile.
 ///
 /// Requests created with [`TwoPassKeyExportRequest::new`] use
-/// [`Tr34Profile::Strict`] by default.
+/// [`Tr34Profile::Strict`] by default. Use
+/// [`TwoPassKeyExportRequest::with_profile`] to select another supported
+/// encoding profile.
 ///
-/// The returned byte vector is the complete DER-encoded CMS ContentInfo
+/// The returned byte vector is the complete DER-encoded CMS `ContentInfo`
 /// containing the TR-34 KDH key token.
 ///
 /// `krd_public_key` is the provider-specific public encryption-key handle
@@ -342,6 +344,77 @@ where
 /// This operation does not validate certificate paths, certificate or CRL
 /// freshness, revocation status, key usage, or that the supplied provider
 /// key handles correspond to the supplied credentials.
+///
+/// # Examples
+///
+/// ```
+/// # use paysec_crypto::{
+/// #     AesCbc,
+/// #     CryptoProvider,
+/// #     RandomBytes,
+/// #     RsaOaepSha256Encrypt,
+/// #     RsaPkcs1v15Sha256Sign,
+/// # };
+/// #
+/// # use paysec_tr34::{
+/// #     KdhCredential,
+/// #     KdhCrl,
+/// #     KrdCredential,
+/// #     Tr34CryptoError,
+/// #     TwoPassKeyExportRequest,
+/// #     export_key_two_pass,
+/// # };
+/// #
+/// # fn export<P, KrdKey, KdhKey>(
+/// #     provider: &mut P,
+/// #     kdh_credential: &KdhCredential,
+/// #     krd_credential: &KrdCredential,
+/// #     krd_public_key: &KrdKey,
+/// #     kdh_signing_key: &KdhKey,
+/// #     clear_key: &[u8],
+/// #     key_block_header: &[u8],
+/// #     krd_random_nonce: &[u8],
+/// #     kdh_crl: &KdhCrl,
+/// # ) -> Result<Vec<u8>, Tr34CryptoError<<P as CryptoProvider>::Error>>
+/// # where
+/// #     P: RandomBytes
+/// #         + AesCbc<[u8]>
+/// #         + RsaOaepSha256Encrypt<KrdKey>
+/// #         + RsaPkcs1v15Sha256Sign<KdhKey>,
+/// #     KrdKey: ?Sized,
+/// #     KdhKey: ?Sized,
+/// # {
+/// let request = TwoPassKeyExportRequest::new(
+///     kdh_credential,
+///     krd_credential,
+///     clear_key,
+///     key_block_header,
+///     krd_random_nonce,
+///     kdh_crl,
+/// );
+///
+/// let token = export_key_two_pass(
+///     provider,
+///     request,
+///     krd_public_key,
+///     kdh_signing_key,
+/// )?;
+///
+/// # Ok(token)
+/// # }
+/// ```
+///
+/// [`Tr34Profile::AnnexB2019`] can be selected on the request when Annex B
+/// interoperability encoding is required.
+///
+/// # Errors
+///
+/// Returns [`Tr34CryptoError::Crypto`] if the cryptographic provider fails
+/// while generating randomness, encrypting the KeyBlock, wrapping the
+/// ephemeral key, or creating the KDH signature.
+///
+/// Returns [`Tr34CryptoError::Tr34`] if TR-34 or ASN.1 construction or final
+/// DER encoding fails.
 pub fn export_key_two_pass<P, KrdKey, KdhKey>(
     provider: &mut P,
     request: TwoPassKeyExportRequest<'_>,
