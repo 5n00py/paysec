@@ -1,20 +1,20 @@
 [package]
 name = "paysec"
-version = "0.3.0"
+version = "0.4.0"
 edition.workspace = true
 rust-version.workspace = true
 authors.workspace = true
 license.workspace = true
 repository.workspace = true
 
-description = "Payment security standards library."
+description = "Payment security standards library for PIN blocks, TR-31, AES DUKPT, and TR-34."
 documentation = "https://docs.rs/paysec"
 readme = "README.md"
 keywords = [
     "payment-security",
     "pin-block",
     "tr31",
-    "cryptography",
+    "tr34",
     "dukpt",
 ]
 categories = ["cryptography"]
@@ -23,3 +23,4 @@ categories = ["cryptography"]
 paysec-pinblock.workspace = true
 paysec-keyblock.workspace = true
 paysec-dukpt.workspace = true
+paysec-tr34.workspace = true

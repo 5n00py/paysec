@@ -26,6 +26,12 @@ The facade currently exposes:
   - Format 3
   - Format 4 with AES protection
 
+- `paysec::tr34`
+  - ASC X9 TR-34 key transport
+  - KDH-side two-pass AES key export
+  - strict CMS encoding
+  - TR-34 2019 Annex B interoperability profile
+
 The underlying crates remain independently versioned and can also be used
 directly.
 
@@ -33,7 +39,7 @@ directly.
 
 ```toml
 [dependencies]
-paysec = "0.3"
+paysec = "0.4"
 ````
 
 Operations that perform cryptography also require a provider. For example,
@@ -41,9 +47,9 @@ using the RustCrypto-based provider:
 
 ```toml
 [dependencies]
-paysec = "0.3"
-paysec-crypto = "0.2.1"
-paysec-crypto-rustcrypto = "0.2.1"
+paysec = "0.4"
+paysec-crypto = "0.3"
+paysec-crypto-rustcrypto = "0.3"
 ```
 
 The `paysec-crypto` dependency is useful for common cryptographic types such
@@ -108,9 +114,10 @@ Applications can also depend directly on the focused crates:
 
 ```toml
 [dependencies]
-paysec-dukpt = "0.1"
-paysec-keyblock = "0.2.1"
-paysec-pinblock = "0.2.1"
+paysec-dukpt = "0.2"
+paysec-keyblock = "0.3"
+paysec-pinblock = "0.3"
+paysec-tr34 = "0.1"
 ```
 
 See their individual documentation for detailed functionality and examples:
@@ -118,6 +125,7 @@ See their individual documentation for detailed functionality and examples:
 * [`paysec-dukpt`](../paysec-dukpt/README.md)
 * [`paysec-keyblock`](../paysec-keyblock/README.md)
 * [`paysec-pinblock`](../paysec-pinblock/README.md)
+* [`paysec-tr34`](../paysec-tr34/README.md)
 
 ## Cryptographic providers
 
@@ -129,8 +137,9 @@ Cryptographic operations are delegated through the provider traits defined by
 * `paysec-crypto-rustcrypto`
 * `paysec-crypto-soft-aes`
 
-This keeps payment-standard functionality separate from the chosen
-cryptographic backend.
+TR-34 two-pass export currently requires capabilities provided by
+`paysec-crypto-rustcrypto`; `paysec-crypto-soft-aes` alone is not a
+complete TR-34 provider.
 
 ## Security
 

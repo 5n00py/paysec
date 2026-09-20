@@ -15,7 +15,7 @@ resolver = "3"
 edition = "2024"
 rust-version = "1.89"
 authors = ["David Schmid <david.schmid@mailbox.org>"]
-license = "GPL-3.0"
+license = "GPL-3.0-only"
 repository = "https://github.com/5n00py/paysec"
 
 [workspace.dependencies]
@@ -41,9 +41,10 @@ pkcs1 = { version = "0.7.5", default-features = false, features = ["std"] }
 spki = { version = "0.7.3", default-features = false, features = ["std"] }
 
 paysec-crypto = { version = "0.3.0", path = "crates/paysec-crypto" }
-paysec-crypto-soft-aes = { version = "0.2.1", path = "crates/paysec-crypto-soft-aes" }
+paysec-crypto-soft-aes = { version = "0.3.0", path = "crates/paysec-crypto-soft-aes" }
 paysec-crypto-rustcrypto = { version = "0.3.0", path = "crates/paysec-crypto-rustcrypto" }
-paysec-pinblock = { version = "0.2.1", path = "crates/paysec-pinblock" }
-paysec-keyblock = { version = "0.2.1", path = "crates/paysec-keyblock" }
-paysec-dukpt = { version = "0.1.0", path = "crates/paysec-dukpt" }
+
+paysec-pinblock = { version = "0.3.0", path = "crates/paysec-pinblock" }
+paysec-keyblock = { version = "0.3.0", path = "crates/paysec-keyblock" }
+paysec-dukpt = { version = "0.2.0", path = "crates/paysec-dukpt" }
 paysec-tr34 = { version = "0.1.0", path = "crates/paysec-tr34" }

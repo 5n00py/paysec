@@ -18,12 +18,16 @@ crates in this workspace, including:
 
 The provider operates on raw software key material.
 
+This provider implements the AES capabilities used by the paysec crates.
+It does not provide the RSA or randomness capabilities required by
+`paysec-tr34`.
+
 ## Installation
 
 ```toml
 [dependencies]
-paysec-crypto = "0.2.0"
-paysec-crypto-soft-aes = "0.2.0"
+paysec-crypto = "0.3"
+paysec-crypto-soft-aes = "0.3"
 ````
 
 ## Usage

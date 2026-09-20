@@ -7,13 +7,14 @@ authors.workspace = true
 license.workspace = true
 repository.workspace = true
 
-description = "RustCrypto AES cryptographic provider for paysec."
+description = "RustCrypto cryptographic provider for paysec."
 documentation = "https://docs.rs/paysec-crypto-rustcrypto"
 readme = "README.md"
 keywords = [
     "payments",
     "cryptography",
     "aes",
+    "rsa",
     "rustcrypto",
 ]
 categories = ["cryptography"]

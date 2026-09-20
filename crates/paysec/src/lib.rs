@@ -3,3 +3,4 @@
 pub use paysec_dukpt as dukpt;
 pub use paysec_keyblock as keyblock;
 pub use paysec_pinblock as pinblock;
+pub use paysec_tr34 as tr34;

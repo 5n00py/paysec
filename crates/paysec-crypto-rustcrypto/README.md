@@ -39,8 +39,8 @@ an OAEP seed directly.
 
 ```toml
 [dependencies]
-paysec-crypto = "0.3.0"
-paysec-crypto-rustcrypto = "0.3.0"
+paysec-crypto = "0.3"
+paysec-crypto-rustcrypto = "0.3"
 ````
 
 ## Example

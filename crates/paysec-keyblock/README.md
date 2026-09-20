@@ -25,9 +25,9 @@ Cryptographic operations are delegated to a `paysec-crypto` provider.
 ```toml
 [dependencies]
 hex = "0.4"
-paysec-keyblock = "0.2.1"
-paysec-crypto = "0.2.1"
-paysec-crypto-rustcrypto = "0.2.1"
+paysec-keyblock = "0.3"
+paysec-crypto = "0.3"
+paysec-crypto-rustcrypto = "0.3"
 ````
 
 ## Example

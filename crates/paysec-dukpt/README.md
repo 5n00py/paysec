@@ -28,9 +28,9 @@ ASC X9 reference implementation.
 
 ```toml
 [dependencies]
-paysec-dukpt = "0.1.0"
-paysec-crypto = "0.2.0"
-paysec-crypto-rustcrypto = "0.2.0"
+paysec-dukpt = "0.2"
+paysec-crypto = "0.3"
+paysec-crypto-rustcrypto = "0.3"
 ````
 
 ## Example

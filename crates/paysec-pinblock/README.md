@@ -22,8 +22,8 @@ The current implementation includes:
 ```toml
 [dependencies]
 hex = "0.4"
-paysec-pinblock = "0.2.1"
-paysec-crypto-rustcrypto = "0.2.1"
+paysec-pinblock = "0.3"
+paysec-crypto-rustcrypto = "0.3"
 ````
 
 ## ISO 9564 Format 4 example
