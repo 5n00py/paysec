@@ -237,6 +237,7 @@ where
                 &encapsulated_content,
                 &signer_info_der,
                 Some(kdh_crl),
+                policy.signed_data_version,
             )?;
 
             Ok(wrap_signed_data_der(&signed_data_der)?)

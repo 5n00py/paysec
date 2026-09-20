@@ -48,6 +48,12 @@ pub(crate) enum SignatureAlgorithmEncoding {
     RsaEncryption,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum SignedDataVersionEncoding {
+    CmsV3,
+    AnnexBSampleV1,
+}
+
 /// Private decomposition of the public TR-34 encoding profiles.
 ///
 /// Keeping the individual compatibility choices private allows public
@@ -60,6 +66,7 @@ pub(crate) struct EncodingPolicy {
     pub(crate) encrypted_content_layout: EncryptedContentLayout,
     pub(crate) oaep_parameters: OaepParametersEncoding,
     pub(crate) signed_attributes_order: SignedAttributesOrder,
+    pub(crate) signed_data_version: SignedDataVersionEncoding,
     pub(crate) signature_algorithm: SignatureAlgorithmEncoding,
 }
 
@@ -72,6 +79,7 @@ impl EncodingPolicy {
                 encrypted_content_layout: EncryptedContentLayout::Cms,
                 oaep_parameters: OaepParametersEncoding::Pkcs1,
                 signed_attributes_order: SignedAttributesOrder::Der,
+                signed_data_version: SignedDataVersionEncoding::CmsV3,
                 signature_algorithm: SignatureAlgorithmEncoding::Sha256WithRsaEncryption,
             },
 
@@ -81,6 +89,7 @@ impl EncodingPolicy {
                 encrypted_content_layout: EncryptedContentLayout::AnnexB2019,
                 oaep_parameters: OaepParametersEncoding::AnnexBSample,
                 signed_attributes_order: SignedAttributesOrder::AnnexBSample,
+                signed_data_version: SignedDataVersionEncoding::AnnexBSampleV1,
                 signature_algorithm: SignatureAlgorithmEncoding::RsaEncryption,
             },
         }
@@ -112,6 +121,8 @@ mod tests {
             policy.signature_algorithm,
             SignatureAlgorithmEncoding::Sha256WithRsaEncryption,
         );
+
+        assert_eq!(policy.signed_data_version, SignedDataVersionEncoding::CmsV3,);
     }
 
     #[test]
@@ -138,6 +149,11 @@ mod tests {
         assert_eq!(
             policy.signed_attributes_order,
             SignedAttributesOrder::AnnexBSample,
+        );
+
+        assert_eq!(
+            policy.signature_algorithm,
+            SignatureAlgorithmEncoding::RsaEncryption,
         );
     }
 }

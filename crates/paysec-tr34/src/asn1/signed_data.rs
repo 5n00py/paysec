@@ -10,12 +10,21 @@ use der::asn1::{Any, OctetString};
 
 use der::{Decode, Encode};
 
+use crate::profile::SignedDataVersionEncoding;
+
 use crate::asn1::signed_attributes::encode_constructed;
 use crate::asn1::signer_info::sha256_algorithm_identifier;
 
 use crate::oid::{ID_ENVELOPED_DATA, ID_SIGNED_DATA};
 
 use crate::{KdhCrl, Tr34Error};
+
+fn signed_data_version(encoding: SignedDataVersionEncoding) -> CmsVersion {
+    match encoding {
+        SignedDataVersionEncoding::CmsV3 => CmsVersion::V3,
+        SignedDataVersionEncoding::AnnexBSampleV1 => CmsVersion::V1,
+    }
+}
 
 /// Construct the outer CMS SignedData for a TR-34 key token.
 ///
@@ -74,12 +83,13 @@ pub(crate) fn build_key_token_signed_data(
 /// This is used by compatibility paths whose SignerInfo cannot safely pass
 /// through the normal CMS object model without changing its wire encoding.
 ///
-/// The surrounding SignedData fields deliberately remain identical to the
-/// strict path in this slice. In particular, SignedData version remains V3.
+/// `version` controls only the outer SignedData version encoding. The strict
+/// structured path continues to derive and encode CMS version 3 normally.
 pub(crate) fn encode_signed_data_with_signer_info_der(
     encapsulated_content: &[u8],
     signer_info_der: &[u8],
     kdh_crl: Option<&KdhCrl>,
+    version: SignedDataVersionEncoding,
 ) -> Result<Vec<u8>, Tr34Error> {
     let digest_algorithms =
         DigestAlgorithmIdentifiers::try_from(vec![sha256_algorithm_identifier()])?.to_der()?;
@@ -95,7 +105,7 @@ pub(crate) fn encode_signed_data_with_signer_info_der(
 
     let mut content = Vec::new();
 
-    content.extend_from_slice(&CmsVersion::V3.to_der()?);
+    content.extend_from_slice(&signed_data_version(version).to_der()?);
 
     content.extend_from_slice(&digest_algorithms);
 
@@ -270,6 +280,7 @@ mod tests {
             encapsulated_content,
             &signer_info_der,
             Some(&kdh_crl),
+            SignedDataVersionEncoding::CmsV3,
         )
         .unwrap();
 
@@ -338,5 +349,26 @@ mod tests {
         let decoded = ContentInfo::from_der(&encoded).unwrap();
 
         assert_eq!(decoded, content_info,);
+    }
+
+    #[test]
+    fn raw_signed_data_can_encode_annex_b_version_one() {
+        let encapsulated_content = b"exact enveloped data DER";
+
+        let signer_info = signer_info(encapsulated_content);
+
+        let signer_info_der = signer_info.to_der().unwrap();
+
+        let encoded = encode_signed_data_with_signer_info_der(
+            encapsulated_content,
+            &signer_info_der,
+            None,
+            SignedDataVersionEncoding::AnnexBSampleV1,
+        )
+        .unwrap();
+
+        let decoded = SignedData::from_der(&encoded).unwrap();
+
+        assert_eq!(decoded.version, CmsVersion::V1,);
     }
 }
