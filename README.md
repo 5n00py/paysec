@@ -345,6 +345,29 @@ Possible future areas include:
 
 These are possible areas of development rather than committed release plans.
 
+### AI-assisted development
+
+Parts of `paysec` predate the widespread availability of generative AI and
+were developed without AI assistance.
+
+More recent development has used AI tools selectively as part of an
+author-directed workflow. This has included assistance with refactoring, code
+review, documentation, and the development and review of unit and integration
+tests.
+
+AI-generated changes are not applied autonomously. Development is performed
+incrementally, with proposed changes reviewed by the maintainer, added to the
+codebase deliberately, tested, and inspected before being committed.
+
+The project does not use autonomous AI agents to modify or maintain the
+repository.
+
+The overall architecture, public API design, cryptographic abstractions,
+security boundaries, and project direction remain maintainer-designed and
+maintainer-controlled. Responsibility for the resulting code and releases
+remains with the project maintainer.
+
+
 ## License
 
 `paysec` is licensed under the GNU General Public License Version 3.0 only
