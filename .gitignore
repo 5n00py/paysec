@@ -1,2 +1,3 @@
 target/
 .idea/
+crates/paysec-crypto-pkcs11/tests/.env

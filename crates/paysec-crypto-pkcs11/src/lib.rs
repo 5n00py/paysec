@@ -1,3 +1,4 @@
+mod aes;
 mod auth;
 mod config;
 mod error;
