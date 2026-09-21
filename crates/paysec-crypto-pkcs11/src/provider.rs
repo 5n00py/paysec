@@ -66,6 +66,18 @@ impl Pkcs11Provider {
     pub fn slot_id(&self) -> u64 {
         self.slot.id()
     }
+
+    pub(crate) fn with_session<T>(
+        &self,
+        operation: impl FnOnce(&Session) -> Result<T, Pkcs11Error>,
+    ) -> Result<T, Pkcs11Error> {
+        let session = self
+            .session
+            .lock()
+            .map_err(|_| Pkcs11Error::new("PKCS #11 session lock poisoned"))?;
+
+        operation(&session)
+    }
 }
 
 impl CryptoProvider for Pkcs11Provider {

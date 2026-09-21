@@ -2,6 +2,7 @@ mod auth;
 mod config;
 mod error;
 mod key;
+mod object;
 mod provider;
 
 pub use auth::{Pkcs11Auth, Pkcs11UserPin};
