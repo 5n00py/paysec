@@ -119,3 +119,37 @@ fn aes_cmac_matches_rfc_4493_known_answer_vector() {
 
     assert_eq!(mac, expected);
 }
+
+#[test]
+#[ignore = "requires a provisioned SoftHSM token; see tests/README.md"]
+fn missing_aes_key_returns_error() {
+    let provider = provider_from_env();
+
+    let key = Pkcs11Key::by_id([0xff]);
+    let block = [0u8; 16];
+
+    let error = provider
+        .encrypt_block(&key, &block)
+        .expect_err("missing key must fail");
+
+    assert!(error.to_string().contains("no matching PKCS #11 key found"));
+}
+
+#[test]
+#[ignore = "requires a provisioned SoftHSM token; see tests/README.md"]
+fn aes_cbc_rejects_non_block_aligned_input() {
+    let provider = provider_from_env();
+
+    let key = Pkcs11Key::by_id(AES_NIST_KEY_ID);
+    let iv = [0u8; 16];
+    let plaintext = [0u8; 15];
+
+    let error = provider
+        .encrypt_cbc(&key, &iv, &plaintext)
+        .expect_err("non-block-aligned plaintext must fail");
+
+    assert_eq!(
+        error.to_string(),
+        "AES-CBC plaintext length must be a multiple of 16 bytes"
+    );
+}

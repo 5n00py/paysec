@@ -33,6 +33,18 @@ impl Pkcs11Provider {
 
         let slot = resolve_slot(&pkcs11, config.token())?;
 
+        if matches!(auth, Pkcs11Auth::ProtectedAuthenticationPath) {
+            let token_info = pkcs11.get_token_info(slot).map_err(|error| {
+                Pkcs11Error::cryptoki("failed to read PKCS #11 token information", error)
+            })?;
+
+            if !token_info.protected_authentication_path() {
+                return Err(Pkcs11Error::new(
+                    "PKCS #11 token does not support a protected authentication path",
+                ));
+            }
+        }
+
         let session = pkcs11.open_ro_session(slot).map_err(|error| {
             Pkcs11Error::cryptoki("failed to open PKCS #11 read-only session", error)
         })?;
@@ -130,5 +142,17 @@ fn resolve_slot(pkcs11: &Pkcs11, selector: &TokenSelector) -> Result<Slot, Pkcs1
                 ))),
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn assert_send_sync<T: Send + Sync>() {}
+
+    #[test]
+    fn provider_is_send_and_sync() {
+        assert_send_sync::<Pkcs11Provider>();
     }
 }
