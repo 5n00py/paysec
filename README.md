@@ -18,50 +18,55 @@ newer**.
 
 Implemented functionality includes:
 
-- **ANSI X9.24-3 AES DUKPT**
-  - receiving-side / host key derivation
-  - native 96-bit AES Key Serial Numbers
-  - AES-128, AES-192, and AES-256
-  - Initial Key derivation
-  - transaction working-key derivation
-  - DUKPT Update Key derivation
+* **ANSI X9.24-3 AES DUKPT**
 
-- **ASC X9 TR-31-2018**
-  - key block Version `D`
-  - AES-based key block protection
-  - key wrapping and unwrapping
-  - key block headers and optional blocks
-  - KBEK and KBAK derivation using AES-CMAC
+  * receiving-side / host key derivation
+  * native 96-bit AES Key Serial Numbers
+  * AES-128, AES-192, and AES-256
+  * Initial Key derivation
+  * transaction working-key derivation
+  * DUKPT Update Key derivation
 
-- **ISO 9564 PIN blocks**
-  - Format 3 encoding and decoding
-  - Format 4 encoding and decoding
-  - AES-based Format 4 enciphering and deciphering
-  - PIN and PAN processing
+* **ASC X9 TR-31-2018**
 
-- **ASC X9 TR-34-2019**
-  - KDH-side two-pass symmetric key export
-  - AES-128-CBC key transport
-  - RSAES-OAEP-SHA256 ephemeral-key protection
-  - RSA PKCS#1 v1.5 SHA-256 signatures
-  - strict CMS-oriented encoding
-  - TR-34 2019 Annex B interoperability profile
-  - provider-neutral cryptographic operations
+  * key block Version `D`
+  * AES-based key block protection
+  * key wrapping and unwrapping
+  * key block headers and optional blocks
+  * KBEK and KBAK derivation using AES-CMAC
+
+* **ISO 9564 PIN blocks**
+
+  * Format 3 encoding and decoding
+  * Format 4 encoding and decoding
+  * AES-based Format 4 enciphering and deciphering
+  * PIN and PAN processing
+
+* **ASC X9 TR-34-2019**
+
+  * KDH-side two-pass symmetric key export
+  * AES-128-CBC key transport
+  * RSAES-OAEP-SHA256 ephemeral-key protection
+  * RSA PKCS#1 v1.5 SHA-256 signatures
+  * strict CMS-oriented encoding
+  * TR-34 2019 Annex B interoperability profile
+  * provider-neutral cryptographic operations
 
 ## Workspace
 
 The project is organized as independently versioned Cargo crates.
 
-| Crate | Version | Purpose |
-| --- | --- | --- |
-| [`paysec`](crates/paysec/README.md) | `0.4.0` | Convenience facade for payment-security functionality |
-| [`paysec-dukpt`](crates/paysec-dukpt/README.md) | `0.2.0` | ANSI X9.24-3 AES DUKPT host-side key derivation |
-| [`paysec-keyblock`](crates/paysec-keyblock/README.md) | `0.3.0` | TR-31 key block processing |
-| [`paysec-pinblock`](crates/paysec-pinblock/README.md) | `0.3.0` | ISO 9564 PIN block processing |
-| [`paysec-tr34`](crates/paysec-tr34/README.md) | `0.1.0` | TR-34 KDH-side two-pass AES key transport |
-| [`paysec-crypto`](crates/paysec-crypto/README.md) | `0.3.0` | Provider-independent cryptographic capability traits |
-| [`paysec-crypto-rustcrypto`](crates/paysec-crypto-rustcrypto/README.md) | `0.3.0` | RustCrypto-based software provider |
-| [`paysec-crypto-soft-aes`](crates/paysec-crypto-soft-aes/README.md) | `0.3.0` | `soft-aes` based AES software provider |
+| Crate                                                                   | Version | Purpose                                               |
+| ----------------------------------------------------------------------- |---------| ----------------------------------------------------- |
+| [`paysec`](crates/paysec/README.md)                                     | `0.4.1` | Convenience facade for payment-security functionality |
+| [`paysec-dukpt`](crates/paysec-dukpt/README.md)                         | `0.2.0` | ANSI X9.24-3 AES DUKPT host-side key derivation       |
+| [`paysec-keyblock`](crates/paysec-keyblock/README.md)                   | `0.3.0` | TR-31 key block processing                            |
+| [`paysec-pinblock`](crates/paysec-pinblock/README.md)                   | `0.3.1` | ISO 9564 PIN block processing                         |
+| [`paysec-tr34`](crates/paysec-tr34/README.md)                           | `0.1.1` | TR-34 KDH-side two-pass AES key transport             |
+| [`paysec-crypto`](crates/paysec-crypto/README.md)                       | `0.3.1` | Provider-independent cryptographic capability traits  |
+| [`paysec-crypto-rustcrypto`](crates/paysec-crypto-rustcrypto/README.md) | `0.3.0` | RustCrypto-based software provider                    |
+| [`paysec-crypto-soft-aes`](crates/paysec-crypto-soft-aes/README.md)     | `0.3.0` | `soft-aes` based AES software provider                |
+| [`paysec-crypto-pkcs11`](crates/paysec-crypto-pkcs11/README.md)         | `0.1.0` | PKCS #11 provider for HSMs and compatible tokens      |
 
 Each crate README contains its supported functionality, installation
 instructions, examples, and crate-specific security considerations.
@@ -101,24 +106,43 @@ RsaPkcs1v15Sha256Verify<K>
 ```
 
 The key type is provider-specific. Software providers can operate on raw key
-material, while the abstraction leaves room for providers using opaque or
-non-exportable key handles.
+material, while providers such as `paysec-crypto-pkcs11` can operate on opaque
+key references without exposing persistent secret or private key material to
+the application.
 
-Two software providers are currently included:
+Three cryptographic providers are currently included:
 
-- `RustCryptoProvider`
-  - AES operations
-  - AES-CMAC and AES-based key derivation
-  - RSA encryption and signatures
-  - cryptographic randomness
-  - supports the capabilities currently required by TR-34
+* `RustCryptoProvider`
 
-- `SoftAesProvider`
-  - AES operations
-  - AES-CMAC and AES-based key derivation
-  - does not provide the RSA or randomness capabilities required by TR-34
+  * AES operations
+  * AES-CMAC and AES-based key derivation
+  * RSA encryption and signatures
+  * cryptographic randomness
+  * supports the capabilities currently required by TR-34
 
-No HSM-backed provider is currently included.
+* `SoftAesProvider`
+
+  * AES operations
+  * AES-CMAC and AES-based key derivation
+  * does not provide the RSA or randomness capabilities required by TR-34
+
+* `Pkcs11Provider`
+
+  * operates on existing PKCS #11 key objects through opaque `Pkcs11Key`
+    references
+  * AES block, AES-CBC, and AES-CMAC operations
+  * token-backed cryptographic randomness
+  * RSAES-OAEP-SHA256 encryption
+  * RSA PKCS#1 v1.5 SHA-256 signing and verification
+  * supports temporary non-persistent AES session objects for ephemeral
+    host-resident keys
+  * satisfies the cryptographic provider requirements of the current TR-34
+    two-pass key-export API
+  * does not currently support TR-31 AES-CMAC key derivation or full
+    HSM-contained DUKPT derivation
+
+PKCS #11 mechanism support and parameter profiles ultimately depend on the
+selected HSM or token.
 
 ## Installation
 
@@ -129,13 +153,23 @@ For the facade crate:
 paysec = "0.4"
 ```
 
-Cryptographic operations also require a provider. For example:
+Cryptographic operations also require a provider. For example, using the
+RustCrypto software provider:
 
 ```toml
 [dependencies]
 paysec = "0.4"
 paysec-crypto = "0.3"
 paysec-crypto-rustcrypto = "0.3"
+```
+
+Or using a PKCS #11-backed provider:
+
+```toml
+[dependencies]
+paysec = "0.4"
+paysec-crypto = "0.3"
+paysec-crypto-pkcs11 = "0.1"
 ```
 
 Applications can also depend directly on individual crates:
@@ -149,9 +183,11 @@ paysec-tr34 = "0.1"
 
 paysec-crypto = "0.3"
 paysec-crypto-rustcrypto = "0.3"
+paysec-crypto-pkcs11 = "0.1"
 ```
 
-See the individual crate READMEs for detailed usage examples.
+See the individual crate READMEs for detailed usage examples and
+provider-specific requirements.
 
 ## Security
 
@@ -162,6 +198,23 @@ appropriate.
 
 They do not provide the isolation or non-exportability guarantees of a
 Hardware Security Module.
+
+`paysec-crypto-pkcs11` instead performs supported cryptographic operations
+through an existing PKCS #11 token and can use persistent secret and private
+keys through opaque references without reading their key values into the
+application.
+
+Whether a PKCS #11 key is actually non-exportable depends on the token, the
+key's attributes, and the provisioning process. Use of `Pkcs11Provider` alone
+does not establish that a key was securely generated or configured as
+non-extractable.
+
+Some protocols deliberately use ephemeral key material in application memory.
+For example, the current TR-34 implementation generates an ephemeral AES key
+through the selected cryptographic provider. When used with
+`Pkcs11Provider`, this host-resident key is imported only as a temporary
+non-persistent PKCS #11 session object for the required AES operation and is
+destroyed afterward.
 
 The payment-standard crates use dedicated secret types where appropriate.
 These types redact secret values from debug output and zeroize owned secret
@@ -175,8 +228,9 @@ construction, accept caller-supplied random data. TR-34 obtains the randomness
 required for ephemeral keys, initialization vectors, and RSAES-OAEP through
 the selected cryptographic provider.
 
-Applications remain responsible for selecting entropy sources and providers
-appropriate for their security requirements.
+Applications remain responsible for selecting entropy sources, cryptographic
+providers, token configurations, and key-management processes appropriate for
+their security requirements.
 
 TR-34 credential parsing does not by itself establish trust. Applications
 remain responsible for certificate-path validation, certificate and CRL
@@ -215,30 +269,48 @@ Run documentation tests:
 cargo test --workspace --doc --locked
 ```
 
-Run Clippy across the workspace:
-
-```bash
-cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
-```
-
 Generate API documentation locally:
 
 ```bash
 cargo doc --workspace --no-deps --locked --open
 ```
 
+### PKCS #11 integration tests
+
+The `paysec-crypto-pkcs11` crate includes opt-in integration tests against
+SoftHSM2. These tests require a separately initialized and provisioned test
+token and are ignored during a normal workspace test run.
+
+After preparing the SoftHSM test environment, run them explicitly with:
+
+```bash
+cargo test \
+    -p paysec-crypto-pkcs11 \
+    --test softhsm \
+    -- --ignored --test-threads=1
+```
+
+See
+[`crates/paysec-crypto-pkcs11/tests/README.md`](crates/paysec-crypto-pkcs11/tests/README.md)
+for setup and provisioning instructions.
+
+SoftHSM does not currently support the RSA-OAEP SHA-256/MGF1-SHA256 parameter
+profile required by `paysec-crypto`, so that capability cannot be exercised
+end-to-end with the SoftHSM integration environment.
+
 ## Documentation
 
 Detailed documentation is available in the individual crate READMEs:
 
-- [`paysec`](crates/paysec/README.md)
-- [`paysec-dukpt`](crates/paysec-dukpt/README.md)
-- [`paysec-keyblock`](crates/paysec-keyblock/README.md)
-- [`paysec-pinblock`](crates/paysec-pinblock/README.md)
-- [`paysec-tr34`](crates/paysec-tr34/README.md)
-- [`paysec-crypto`](crates/paysec-crypto/README.md)
-- [`paysec-crypto-rustcrypto`](crates/paysec-crypto-rustcrypto/README.md)
-- [`paysec-crypto-soft-aes`](crates/paysec-crypto-soft-aes/README.md)
+* [`paysec`](crates/paysec/README.md)
+* [`paysec-dukpt`](crates/paysec-dukpt/README.md)
+* [`paysec-keyblock`](crates/paysec-keyblock/README.md)
+* [`paysec-pinblock`](crates/paysec-pinblock/README.md)
+* [`paysec-tr34`](crates/paysec-tr34/README.md)
+* [`paysec-crypto`](crates/paysec-crypto/README.md)
+* [`paysec-crypto-rustcrypto`](crates/paysec-crypto-rustcrypto/README.md)
+* [`paysec-crypto-soft-aes`](crates/paysec-crypto-soft-aes/README.md)
+* [`paysec-crypto-pkcs11`](crates/paysec-crypto-pkcs11/README.md)
 
 Published API documentation is available through
 [docs.rs](https://docs.rs/).
@@ -261,13 +333,15 @@ generation.
 
 Possible future areas include:
 
-- HSM-backed cryptographic providers
-- additional TR-34 lifecycle protocols such as bind, unbind, and rebind
-- additional TR-34 interoperability profiles
-- ANSI X9.143 and ISO 20038 key-block extensions
-- additional TR-31 key block versions
-- additional PIN block formats
-- additional payment cryptography and key-management functionality
+* opaque PKCS #11 key derivation for TR-31 Version D
+* HSM-contained DUKPT derivation
+* additional PKCS #11 provider capabilities and HSM interoperability testing
+* additional TR-34 lifecycle protocols such as bind, unbind, and rebind
+* additional TR-34 interoperability profiles
+* ANSI X9.143 and ISO 20038 key-block extensions
+* additional TR-31 key block versions
+* additional PIN block formats
+* additional payment cryptography and key-management functionality
 
 These are possible areas of development rather than committed release plans.
 

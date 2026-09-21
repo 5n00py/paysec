@@ -1,6 +1,6 @@
 [package]
 name = "paysec-tr34"
-version = "0.1.0"
+version = "0.1.1"
 edition.workspace = true
 rust-version.workspace = true
 authors.workspace = true
@@ -13,9 +13,9 @@ readme = "README.md"
 keywords = [
     "payments",
     "payment-security",
-    "key-block",
     "tr34",
     "cryptography",
+    "key-transport",
 ]
 categories = ["cryptography"]
 

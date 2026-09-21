@@ -9,13 +9,16 @@ Token (`KTKDH`).
 
 Two encoding profiles are supported:
 
-- **`Tr34Profile::Strict`** — standards-oriented CMS / ASN.1 encoding.
-- **`Tr34Profile::AnnexB2019`** — interoperability encoding based on the
+* **`Tr34Profile::Strict`** — standards-oriented CMS / ASN.1 encoding.
+* **`Tr34Profile::AnnexB2019`** — interoperability encoding based on the
   conventions demonstrated by the ASC X9 TR 34-2019 Annex B examples.
 
 The cryptographic backend is provider-neutral: `paysec-tr34` depends on
 capabilities defined by `paysec-crypto` rather than selecting a concrete
 cryptographic implementation itself.
+
+The repository includes both software and PKCS #11-backed providers capable of
+satisfying the cryptographic interfaces required by the TR-34 export API.
 
 > **Current scope:** two-pass KDH export, AES-128-CBC content encryption,
 > RSAES-OAEP-SHA256 key wrapping, and RSA PKCS#1 v1.5 SHA-256 signatures. TDEA
@@ -53,22 +56,23 @@ remote cryptographic devices without relying on a pre-shared transport key.
 
 ## Supported functionality
 
-| Capability | Status |
-| --- | --- |
-| KDH-side key export | Supported |
-| Two-pass protocol | Supported |
-| One-pass protocol | Not implemented |
-| AES-based key transport | Supported |
-| TDEA / TDES key transport | Not implemented |
-| Strict CMS / normative-style encoding | Supported |
-| TR-34 2019 Annex B compatibility encoding | Supported |
-| KRD-side token verification / decryption / import | Not implemented |
-| Certificate-path validation | Not performed |
-| Certificate validity / key-usage validation | Not performed |
-| CRL freshness / signature / revocation validation | Not performed |
-| RTKRD generation | Not performed; the KRD nonce is supplied by the caller |
-| Bind / unbind / rebind protocols | Not implemented |
-| HSM-backed provider included in this repository | No |
+| Capability                                        | Status                                                 |
+| ------------------------------------------------- | ------------------------------------------------------ |
+| KDH-side key export                               | Supported                                              |
+| Two-pass protocol                                 | Supported                                              |
+| One-pass protocol                                 | Not implemented                                        |
+| AES-based key transport                           | Supported                                              |
+| TDEA / TDES key transport                         | Not implemented                                        |
+| Strict CMS / normative-style encoding             | Supported                                              |
+| TR-34 2019 Annex B compatibility encoding         | Supported                                              |
+| KRD-side token verification / decryption / import | Not implemented                                        |
+| Certificate-path validation                       | Not performed                                          |
+| Certificate validity / key-usage validation       | Not performed                                          |
+| CRL freshness / signature / revocation validation | Not performed                                          |
+| RTKRD generation                                  | Not performed; the KRD nonce is supplied by the caller |
+| Bind / unbind / rebind protocols                  | Not implemented                                        |
+| Software cryptographic provider                   | Included                                               |
+| PKCS #11 / HSM-backed provider                    | Included                                               |
 
 The implementation is intentionally narrow: it provides a well-defined
 key-token construction primitive rather than trying to own the complete PKI,
@@ -79,20 +83,29 @@ device-lifecycle, or key-management system around TR-34.
 Add the TR-34 crate and a cryptographic provider appropriate for your
 environment.
 
-For example, using the RustCrypto software provider from this workspace:
+For example, using the RustCrypto software provider:
 
 ```toml
 [dependencies]
 paysec-tr34 = "0.1"
-paysec-crypto-rustcrypto = "0.2"
+paysec-crypto-rustcrypto = "0.3"
 ```
 
-Provider-specific key loading may require additional dependencies for the
-chosen key format.
+Or using the PKCS #11 provider with an HSM or compatible token:
+
+```toml
+[dependencies]
+paysec-tr34 = "0.1"
+paysec-crypto-pkcs11 = "0.1"
+```
+
+Provider-specific key loading or selection may require additional
+configuration or dependencies.
 
 The payment-standard layer and cryptographic implementation are intentionally
-separate so an application can use software keys during development or
-integrate another provider using opaque / non-exportable key handles.
+separate so an application can use software-managed keys during development or
+opaque PKCS #11 key references in an HSM-backed deployment without changing
+the TR-34 protocol API.
 
 ## Public API
 
@@ -225,17 +238,17 @@ interoperability.
 The public API exposes coherent profiles rather than individual compatibility
 switches.
 
-| Encoding detail | `Strict` | `AnnexB2019` |
-| --- | --- | --- |
-| KeyBlock version | `INTEGER 0` | `INTEGER 1` |
-| KeyBlock header | bare `OCTET STRING` | `id-data` Attribute wrapper |
-| `encryptedContent` placement | CMS `EncryptedContentInfo` sibling field | inside the content-encryption `SEQUENCE` |
-| AES-CBC IV | 16 bytes | 16 bytes |
-| RSAES-OAEP parameters | PKCS#1 tagged form | Annex B sample representation |
-| `SignedAttributes` ordering | canonical DER `SET OF` ordering | Annex B sample order |
-| outer `SignedData.version` | CMS-derived version `3` | `INTEGER 1` |
-| `SignerInfo.signatureAlgorithm` | `sha256WithRSAEncryption` | `rsaEncryption` |
-| KDH CRL | included | included |
+| Encoding detail                 | `Strict`                                 | `AnnexB2019`                             |
+| ------------------------------- | ---------------------------------------- | ---------------------------------------- |
+| KeyBlock version                | `INTEGER 0`                              | `INTEGER 1`                              |
+| KeyBlock header                 | bare `OCTET STRING`                      | `id-data` Attribute wrapper              |
+| `encryptedContent` placement    | CMS `EncryptedContentInfo` sibling field | inside the content-encryption `SEQUENCE` |
+| AES-CBC IV                      | 16 bytes                                 | 16 bytes                                 |
+| RSAES-OAEP parameters           | PKCS#1 tagged form                       | Annex B sample representation            |
+| `SignedAttributes` ordering     | canonical DER `SET OF` ordering          | Annex B sample order                     |
+| outer `SignedData.version`      | CMS-derived version `3`                  | `INTEGER 1`                              |
+| `SignerInfo.signatureAlgorithm` | `sha256WithRSAEncryption`                | `rsaEncryption`                          |
+| KDH CRL                         | included                                 | included                                 |
 
 `Strict` is the default.
 
@@ -249,8 +262,8 @@ For a deeper discussion, see [`docs/compatibility.md`](docs/compatibility.md).
 
 TR-34 2019 contains a useful but important distinction:
 
-- **Annex D is normative ASN.1.**
-- **Annex B is informative example material.**
+* **Annex D is normative ASN.1.**
+* **Annex B is informative example material.**
 
 Several Annex B encodings differ from the normative definitions or from normal
 CMS encoding rules. Some of those differences also appear in real
@@ -269,8 +282,8 @@ Header as an `OCTET STRING`.
 
 The published AES KeyBlock in Annex B instead uses:
 
-- version `INTEGER 1`;
-- an `id-data` Attribute wrapper around the Key Block Header.
+* version `INTEGER 1`;
+* an `id-data` Attribute wrapper around the Key Block Header.
 
 `AnnexB2019` reproduces those sample encoding conventions.
 
@@ -297,8 +310,8 @@ demonstrated by the published sample.
 In DER, a `SET OF` is canonically ordered.
 
 The Annex B examples present the signed attributes in a fixed example order
-instead. Because the signature is calculated over the encoded SignedAttributes,
-reordering them changes the bytes being signed.
+instead. Because the signature is calculated over the encoded
+`SignedAttributes`, reordering them changes the bytes being signed.
 
 `AnnexB2019` therefore preserves the Annex B attribute order all the way
 through signature generation and emitted `SignerInfo`.
@@ -313,8 +326,8 @@ The actual B.9.1 sample token encodes version `1`.
 
 The profiles intentionally make that difference explicit:
 
-- `Strict` -> version `3`
-- `AnnexB2019` -> version `1`
+* `Strict` -> version `3`
+* `AnnexB2019` -> version `1`
 
 ### Signature `AlgorithmIdentifier`
 
@@ -325,8 +338,8 @@ The actual cryptographic operation in this crate remains an RSA PKCS#1 v1.5
 SHA-256 signature. The profile controls how the signature algorithm is
 identified on the wire:
 
-- `Strict` -> `sha256WithRSAEncryption`
-- `AnnexB2019` -> `rsaEncryption`
+* `Strict` -> `sha256WithRSAEncryption`
+* `AnnexB2019` -> `rsaEncryption`
 
 ## Published AES-vector inconsistencies
 
@@ -392,8 +405,8 @@ The current AES two-pass export performs the following operations:
 
 ```text
 KRD random nonce
-       |
-       v
+      |
+      v
 +-----------------------------+
 | SignedAttributes            |
 | - contentType               |
@@ -401,30 +414,30 @@ KRD random nonce
 | - Key Block Header          |
 | - messageDigest             |
 +-----------------------------+
-              |
-              | signed by KDH
-              v
-         SignerInfo
-              |
-              v
+             |
+             | signed by KDH
+             v
+        SignerInfo
+             |
+             v
         +-----------+
         | SignedData|---- includes KDH CRL
         +-----------+
-              ^
-              |
+             ^
+             |
         EnvelopedData
-              ^
-              |
+             ^
+             |
    +-----------------------+
    | encrypted KeyBlock    |
    | AES-128-CBC under KE  |
    +-----------------------+
-              ^
-              |
+             ^
+             |
          ephemeral KE
-              |
-              | RSAES-OAEP-SHA256
-              v
+             |
+             | RSAES-OAEP-SHA256
+             v
       encrypted for KRD
 ```
 
@@ -446,39 +459,87 @@ RsaPkcs1v15Sha256Sign<KdhKey>
 
 The key types are generic.
 
-A software provider can use ordinary RSA key objects and raw AES material
-internally, while another provider can use opaque handles backed by a secure
-device or HSM without changing the TR-34 protocol API.
+A software provider can use ordinary RSA key objects and raw AES material,
+while a PKCS #11 provider can resolve opaque RSA key references to key objects
+stored in an HSM or compatible token without changing the TR-34 protocol API.
 
-The repository includes `paysec-crypto-rustcrypto` as a software implementation
-suitable for development, testing, interoperability work, and environments
-where software-managed keys are appropriate.
+The repository currently includes two providers capable of satisfying these
+TR-34 trait requirements.
 
-An HSM-backed provider is not currently included.
+### RustCrypto provider
+
+`paysec-crypto-rustcrypto` is a software implementation suitable for
+development, testing, interoperability work, and environments where
+software-managed keys are appropriate.
+
+It performs the required AES, RSA, and random-generation operations in
+software.
+
+### PKCS #11 provider
+
+`paysec-crypto-pkcs11` provides the required capabilities through PKCS #11.
+
+The KRD RSA public key and KDH RSA signing key can be represented by opaque
+`Pkcs11Key` references to objects already provisioned in an HSM or compatible
+token.
+
+The ephemeral AES key used by the TR-34 construction is intentionally
+generated as host-resident material by the current TR-34 API. For the
+AES-CBC operation, `Pkcs11Provider` imports this key as a temporary
+non-persistent PKCS #11 session object, performs the operation, and destroys
+the object immediately afterward.
+
+The provider's token RNG is used for `RandomBytes`.
+
+A compile-time integration test in `paysec-crypto-pkcs11` verifies that
+`Pkcs11Provider` satisfies the actual trait requirements of
+`export_key_two_pass`.
+
+Actual mechanism and parameter support still depends on the selected PKCS #11
+token.
+
+In particular, the SoftHSM implementation used by the project's PKCS #11
+integration environment does not support the SHA-256/MGF1-SHA256 parameter
+profile required for `CKM_RSA_PKCS_OAEP`. SoftHSM therefore cannot currently
+run the complete TR-34 PKCS #11 flow end-to-end.
+
+The provider implementation is not weakened to SHA-1 to accommodate SoftHSM.
+A PKCS #11 HSM supporting the required RSA-OAEP profile can use the existing
+provider implementation.
 
 ## Security and validation responsibilities
 
 `export_key_two_pass` constructs the TR-34 key token. It does **not** establish
 the complete trust policy around the operation.
 
-The application is responsible for validating whatever its deployment requires,
-including:
+The application is responsible for validating whatever its deployment
+requires, including:
 
-- the KDH and KRD certificate chains;
-- certificate validity periods;
-- certificate key usage and other certificate-policy requirements;
-- CRL signature and freshness;
-- KDH revocation status;
-- the expected identity of the KRD;
-- that `krd_public_key` actually corresponds to the supplied KRD credential;
-- that `kdh_signing_key` actually corresponds to the supplied KDH credential;
-- generation, storage, and freshness tracking of the KRD two-pass nonce;
-- semantic correctness of the supplied Key Block Header;
-- lifecycle, authorization, auditing, and destruction of transported keys.
+* the KDH and KRD certificate chains;
+* certificate validity periods;
+* certificate key usage and other certificate-policy requirements;
+* CRL signature and freshness;
+* KDH revocation status;
+* the expected identity of the KRD;
+* that `krd_public_key` actually corresponds to the supplied KRD credential;
+* that `kdh_signing_key` actually corresponds to the supplied KDH credential;
+* generation, storage, and freshness tracking of the KRD two-pass nonce;
+* semantic correctness of the supplied Key Block Header;
+* lifecycle, authorization, auditing, and destruction of transported keys.
 
 The `clear_key` slice is supplied by the caller. The caller remains responsible
 for how that key is generated, stored, protected, and erased outside the
 temporary internal buffers owned by this crate.
+
+The ephemeral AES key generated internally by the TR-34 export also exists in
+application memory. A PKCS #11 provider can use a temporary session object for
+the AES operation, but this does not make the ephemeral key fully
+HSM-contained.
+
+When persistent RSA keys are represented by `Pkcs11Key`, the provider can
+perform supported operations without reading their private key values into the
+application. Whether those keys are actually non-exportable depends on the
+token, object attributes, and provisioning process.
 
 Using this crate does not by itself establish compliance with PCI, ANSI, ISO,
 card-network, or other payment-security requirements. Production deployments
@@ -488,21 +549,21 @@ operational controls.
 
 ## Current limitations
 
-The current implementation deliberately does not attempt to cover all of TR-34.
+The current implementation deliberately does not attempt to cover all of
+TR-34.
 
 Not implemented at this stage:
 
-- TDEA / TDES transport;
-- one-pass key transport;
-- KRD-side token processing;
-- credential-token exchange as a high-level protocol workflow;
-- RTKRD generation or replay-state management;
-- bind, unbind, and rebind flows;
-- higher-level authority unbind / rebind;
-- certificate-path construction or trust-anchor management;
-- certificate and CRL policy validation;
-- automatic TR-31 Key Block Header construction or semantic validation;
-- an HSM-specific crypto provider.
+* TDEA / TDES transport;
+* one-pass key transport;
+* KRD-side token processing;
+* credential-token exchange as a high-level protocol workflow;
+* RTKRD generation or replay-state management;
+* bind, unbind, and rebind flows;
+* higher-level authority unbind / rebind;
+* certificate-path construction or trust-anchor management;
+* certificate and CRL policy validation;
+* automatic TR-31 Key Block Header construction or semantic validation.
 
 The current public operation is therefore best viewed as:
 
@@ -516,19 +577,19 @@ The crate test suite separates three different concerns.
 ### Strict regression tests
 
 The strict path has a frozen complete-token regression vector. This protects
-the standards-oriented CMS encoding from accidental changes while compatibility
-support evolves.
+the standards-oriented CMS encoding from accidental changes while
+compatibility support evolves.
 
 ### Published TR-34 2019 AES vectors
 
 The tests preserve the published Annex B AES fixtures and explicitly document
 their inconsistencies, including:
 
-- KeyBlock version / header representation;
-- non-CMS `encryptedContent` placement;
-- the serialized eight-byte IV;
-- recovery of the actual 16-byte IV;
-- the different Key Block Header found after decrypting the published
+* KeyBlock version / header representation;
+* non-CMS `encryptedContent` placement;
+* the serialized eight-byte IV;
+* recovery of the actual 16-byte IV;
+* the different Key Block Header found after decrypting the published
   ciphertext.
 
 ### Annex B end-to-end export
@@ -537,9 +598,25 @@ A separate public-API integration test exercises `Tr34Profile::AnnexB2019` end
 to end and verifies that the intended compatibility choices reach the final
 token together.
 
+### PKCS #11 provider compatibility
+
+`paysec-crypto-pkcs11` contains a compile-time integration test against the
+actual `export_key_two_pass` API.
+
+This verifies that the PKCS #11 provider supplies all required cryptographic
+traits without introducing a dependency from `paysec-tr34` onto a concrete
+provider.
+
+The provider's lower-level AES, random-generation, and RSA-signature behavior
+is exercised separately against SoftHSM.
+
+A complete SoftHSM TR-34 export is not currently possible because of
+SoftHSM's RSA-OAEP SHA-256 parameter limitation.
+
 This separation is intentional: the project keeps **what the standard
-publishes**, **what strict CMS requires**, and **what the coherent
-compatibility profile emits** as distinct testable concepts.
+publishes**, **what strict CMS requires**, **what the coherent compatibility
+profile emits**, and **what individual provider environments can exercise** as
+distinct testable concepts.
 
 ## Development
 
@@ -563,11 +640,13 @@ cargo doc -p paysec-tr34 --no-deps
 
 ## Further documentation
 
-- [`docs/compatibility.md`](docs/compatibility.md) — detailed rationale for the
+* [`docs/compatibility.md`](docs/compatibility.md) — detailed rationale for the
   encoding profiles and Annex B interoperability choices.
-- Rust API documentation for `TwoPassKeyExportRequest`, `Tr34Profile`, and
+* Rust API documentation for `TwoPassKeyExportRequest`, `Tr34Profile`, and
   `export_key_two_pass`.
-- ASC X9 TR 34-2019 — protocol definition, Annex B examples, and normative
+* [`paysec-crypto-pkcs11`](../paysec-crypto-pkcs11/README.md) — PKCS #11
+  provider configuration, capabilities, and security model.
+* ASC X9 TR 34-2019 — protocol definition, Annex B examples, and normative
   ASN.1 in Annex D.
 
 The TR-34 standard itself is copyrighted material and is not distributed by
@@ -576,7 +655,7 @@ this crate.
 ## License
 
 `paysec-tr34` is part of the `paysec` project and is licensed under the GNU
-General Public License Version 3.0 (`GPL-3.0`).
+General Public License Version 3.0 only (`GPL-3.0-only`).
 
 See the repository `LICENSE` file for the complete license terms.
 

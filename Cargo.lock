@@ -383,7 +383,7 @@ dependencies = [
 
 [[package]]
 name = "paysec"
-version = "0.4.0"
+version = "0.4.1"
 dependencies = [
  "paysec-dukpt",
  "paysec-keyblock",
@@ -393,7 +393,7 @@ dependencies = [
 
 [[package]]
 name = "paysec-crypto"
-version = "0.3.0"
+version = "0.3.1"
 
 [[package]]
 name = "paysec-crypto-pkcs11"
@@ -452,7 +452,7 @@ dependencies = [
 
 [[package]]
 name = "paysec-pinblock"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "hex",
  "paysec-crypto",
@@ -463,7 +463,7 @@ dependencies = [
 
 [[package]]
 name = "paysec-tr34"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "cms",
  "der",

@@ -43,12 +43,12 @@ spki = { version = "0.7.3", default-features = false, features = ["std"] }
 
 cryptoki = "0.12.1"
 
-paysec-crypto = { version = "0.3.0", path = "crates/paysec-crypto" }
+paysec-crypto = { version = "0.3.1", path = "crates/paysec-crypto" }
 paysec-crypto-soft-aes = { version = "0.3.0", path = "crates/paysec-crypto-soft-aes" }
 paysec-crypto-rustcrypto = { version = "0.3.0", path = "crates/paysec-crypto-rustcrypto" }
 paysec-crypto-pkcs11 = { version = "0.1.0", path = "crates/paysec-crypto-pkcs11" }
 
-paysec-pinblock = { version = "0.3.0", path = "crates/paysec-pinblock" }
+paysec-pinblock = { version = "0.3.1", path = "crates/paysec-pinblock" }
 paysec-keyblock = { version = "0.3.0", path = "crates/paysec-keyblock" }
 paysec-dukpt = { version = "0.2.0", path = "crates/paysec-dukpt" }
-paysec-tr34 = { version = "0.1.0", path = "crates/paysec-tr34" }
+paysec-tr34 = { version = "0.1.1", path = "crates/paysec-tr34" }
