@@ -21,3 +21,4 @@ categories = ["cryptography"]
 [dependencies]
 cryptoki.workspace = true
 paysec-crypto.workspace = true
+zeroize.workspace = true

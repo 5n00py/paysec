@@ -211,3 +211,39 @@ fn random_bytes_are_generated_by_token() {
 
     assert_ne!(first, second);
 }
+
+#[test]
+#[ignore = "requires a provisioned SoftHSM token; see tests/README.md"]
+fn aes_cbc_with_temporary_key_matches_known_answer_vector() {
+    let provider = provider_from_env();
+
+    let key = [
+        0x2b, 0x7e, 0x15, 0x16, 0x28, 0xae, 0xd2, 0xa6, 0xab, 0xf7, 0x15, 0x88, 0x09, 0xcf, 0x4f,
+        0x3c,
+    ];
+
+    let iv = [
+        0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e,
+        0x0f,
+    ];
+
+    let plaintext = [
+        0x6b, 0xc1, 0xbe, 0xe2, 0x2e, 0x40, 0x9f, 0x96, 0xe9, 0x3d, 0x7e, 0x11, 0x73, 0x93, 0x17,
+        0x2a,
+    ];
+
+    let expected = [
+        0x76, 0x49, 0xab, 0xac, 0x81, 0x19, 0xb2, 0x46, 0xce, 0xe9, 0x8e, 0x9b, 0x12, 0xe9, 0x19,
+        0x7d,
+    ];
+
+    let encrypted = <Pkcs11Provider as AesCbc<[u8]>>::encrypt_cbc(&provider, &key, &iv, &plaintext)
+        .expect("AES-CBC encryption with temporary key failed");
+
+    assert_eq!(encrypted, expected);
+
+    let decrypted = <Pkcs11Provider as AesCbc<[u8]>>::decrypt_cbc(&provider, &key, &iv, &expected)
+        .expect("AES-CBC decryption with temporary key failed");
+
+    assert_eq!(decrypted, plaintext);
+}
