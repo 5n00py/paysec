@@ -1,9 +1,8 @@
-// src/object.rs
-
 use cryptoki::object::{Attribute, KeyType, ObjectClass, ObjectHandle};
 use cryptoki::session::Session;
 
-use crate::{KeySelector, Pkcs11Error, Pkcs11Key};
+use crate::key::KeySelector;
+use crate::{Pkcs11Error, Pkcs11Key};
 
 pub(crate) fn resolve_key(
     session: &Session,

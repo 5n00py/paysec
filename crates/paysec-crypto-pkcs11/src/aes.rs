@@ -247,24 +247,64 @@ fn create_temporary_aes_key(session: &Session, key: &[u8]) -> Result<ObjectHandl
     })
 }
 
+/// RAII guard for a temporary PKCS #11 session object.
+///
+/// Normal cleanup is performed explicitly through `destroy` so destruction
+/// errors can be reported. `Drop` provides best-effort cleanup if execution
+/// unwinds before explicit destruction is reached.
+struct TemporaryObject<'a> {
+    session: &'a Session,
+    handle: Option<ObjectHandle>,
+}
+
+impl<'a> TemporaryObject<'a> {
+    fn new(session: &'a Session, handle: ObjectHandle) -> Self {
+        Self {
+            session,
+            handle: Some(handle),
+        }
+    }
+
+    fn handle(&self) -> ObjectHandle {
+        self.handle
+            .expect("temporary PKCS #11 object handle must be present")
+    }
+
+    fn destroy(mut self) -> Result<(), Pkcs11Error> {
+        let handle = self
+            .handle
+            .take()
+            .expect("temporary PKCS #11 object handle must be present");
+
+        self.session.destroy_object(handle).map_err(|error| {
+            Pkcs11Error::cryptoki("failed to destroy temporary PKCS #11 AES key", error)
+        })
+    }
+}
+
+impl Drop for TemporaryObject<'_> {
+    fn drop(&mut self) {
+        if let Some(handle) = self.handle.take() {
+            let _ = self.session.destroy_object(handle);
+        }
+    }
+}
+
 /// Executes an operation using a temporary AES session object.
 ///
 /// Destruction is attempted regardless of whether the cryptographic
-/// operation succeeds. Session objects would also disappear when the
-/// session closes, but the provider keeps its session open for its lifetime,
-/// so temporary keys must be destroyed eagerly.
+/// operation succeeds. The RAII guard also provides best-effort cleanup
+/// during unwinding.
 fn with_temporary_aes_key<T>(
     session: &Session,
     key: &[u8],
     operation: impl FnOnce(ObjectHandle) -> Result<T, Pkcs11Error>,
 ) -> Result<T, Pkcs11Error> {
     let key_handle = create_temporary_aes_key(session, key)?;
+    let temporary_key = TemporaryObject::new(session, key_handle);
 
-    let operation_result = operation(key_handle);
-
-    let destroy_result = session.destroy_object(key_handle).map_err(|error| {
-        Pkcs11Error::cryptoki("failed to destroy temporary PKCS #11 AES key", error)
-    });
+    let operation_result = operation(temporary_key.handle());
+    let destroy_result = temporary_key.destroy();
 
     match (operation_result, destroy_result) {
         (Ok(value), Ok(())) => Ok(value),
@@ -275,7 +315,7 @@ fn with_temporary_aes_key<T>(
 
         (Err(operation_error), Err(destroy_error)) => Err(Pkcs11Error::new(format!(
             "{operation_error}; additionally failed to destroy \
-                 temporary PKCS #11 AES key: {destroy_error}"
+             temporary PKCS #11 AES key: {destroy_error}"
         ))),
     }
 }

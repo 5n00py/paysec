@@ -1,17 +1,7 @@
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum KeySelector {
+pub(crate) enum KeySelector {
     Id(Vec<u8>),
     Label(String),
-}
-
-impl KeySelector {
-    pub fn id(id: impl Into<Vec<u8>>) -> Self {
-        Self::Id(id.into())
-    }
-
-    pub fn label(label: impl Into<String>) -> Self {
-        Self::Label(label.into())
-    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -20,19 +10,19 @@ pub struct Pkcs11Key {
 }
 
 impl Pkcs11Key {
-    pub fn new(selector: KeySelector) -> Self {
-        Self { selector }
-    }
-
     pub fn by_id(id: impl Into<Vec<u8>>) -> Self {
-        Self::new(KeySelector::id(id))
+        Self {
+            selector: KeySelector::Id(id.into()),
+        }
     }
 
     pub fn by_label(label: impl Into<String>) -> Self {
-        Self::new(KeySelector::label(label))
+        Self {
+            selector: KeySelector::Label(label.into()),
+        }
     }
 
-    pub fn selector(&self) -> &KeySelector {
+    pub(crate) fn selector(&self) -> &KeySelector {
         &self.selector
     }
 }

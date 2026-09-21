@@ -207,17 +207,16 @@ session.
 A provider instance can be shared between callers. Cryptographic operations
 currently serialize access through a single PKCS #11 session.
 
-This is intentionally a simple initial session model. Applications should not
-rely on the internal session-management strategy; it may evolve without
-changing the public `Pkcs11Provider` or `Pkcs11Key` APIs.
-
-The provider currently assumes application-level ownership of a PKCS #11
-module initialization. Applications should prefer creating and sharing a
-single `Pkcs11Provider` instance for a module rather than independently
-initializing multiple provider instances for the same module.
+Applications should prefer creating and sharing a single `Pkcs11Provider`
+instance for a PKCS #11 module rather than independently initializing
+multiple provider instances for the same module.
 
 Coordination of multiple PKCS #11 contexts and explicit module finalization is
 not currently part of the provider's lifecycle model.
+
+This is intentionally a simple initial session model. Applications should not
+rely on the internal session-management strategy; it may evolve without
+changing the public `Pkcs11Provider` or `Pkcs11Key` APIs.
 
 ## RSA
 
