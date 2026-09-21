@@ -5,6 +5,7 @@ mod error;
 mod key;
 mod object;
 mod provider;
+mod random;
 mod rsa;
 
 pub use auth::{Pkcs11Auth, Pkcs11UserPin};

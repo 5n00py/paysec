@@ -1,7 +1,7 @@
 use std::env;
 
 use paysec_crypto::{
-    AesBlockCipher, AesCbc, AesCmac, RsaPkcs1v15Sha256Sign, RsaPkcs1v15Sha256Verify,
+    AesBlockCipher, AesCbc, AesCmac, RandomBytes, RsaPkcs1v15Sha256Sign, RsaPkcs1v15Sha256Verify,
 };
 use paysec_crypto_pkcs11::{Pkcs11Auth, Pkcs11Config, Pkcs11Key, Pkcs11Provider, TokenSelector};
 
@@ -191,4 +191,23 @@ fn rsa_pkcs1v15_sha256_rejects_modified_message() {
     let result = provider.verify_pkcs1v15_sha256(&key, b"modified message", &signature);
 
     assert!(result.is_err());
+}
+
+#[test]
+#[ignore = "requires a provisioned SoftHSM token; see tests/README.md"]
+fn random_bytes_are_generated_by_token() {
+    let mut provider = provider_from_env();
+
+    let mut first = [0u8; 32];
+    let mut second = [0u8; 32];
+
+    provider
+        .fill_random(&mut first)
+        .expect("PKCS #11 random-byte generation failed");
+
+    provider
+        .fill_random(&mut second)
+        .expect("PKCS #11 random-byte generation failed");
+
+    assert_ne!(first, second);
 }
