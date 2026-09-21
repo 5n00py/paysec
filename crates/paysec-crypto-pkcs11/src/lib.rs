@@ -5,6 +5,7 @@ mod error;
 mod key;
 mod object;
 mod provider;
+mod rsa;
 
 pub use auth::{Pkcs11Auth, Pkcs11UserPin};
 pub use config::{Pkcs11Config, TokenSelector};

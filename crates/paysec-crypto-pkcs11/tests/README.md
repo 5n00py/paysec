@@ -207,9 +207,50 @@ Remove the temporary clear-key file:
 rm /tmp/paysec-aes-nist-128.bin
 ```
 
+## Provision the RSA test key pair
+
+The RSA integration tests use a 2048-bit RSA key pair generated directly
+inside the SoftHSM token.
+
+The public and private key objects share the same PKCS #11 object ID and
+label:
+
+```text
+ID:    20
+Label: paysec-rsa-2048
+Usage: RSA-OAEP and RSA signature integration tests
+```
+
+Generate the key pair:
+
+```bash
+pkcs11-tool \
+    --module "$PAYSEC_PKCS11_MODULE" \
+    --token-label "$PAYSEC_PKCS11_TOKEN_LABEL" \
+    --pin env:PAYSEC_PKCS11_USER_PIN \
+    --keypairgen \
+    --key-type RSA:2048 \
+    --id 20 \
+    --label "paysec-rsa-2048" \
+    --usage-decrypt \
+    --usage-sign
+```
+
+The key pair is generated inside the token. The private key material is
+therefore not imported into or exported from the test application.
+
+The shared object ID allows `Pkcs11Key::by_id([0x20])` to represent the
+logical RSA key pair. The cryptographic operation determines which
+PKCS #11 object is resolved:
+
+```text
+RSA encryption / verification -> public key object
+RSA decryption / signing      -> private key object
+```
+
 ## Inspect the provisioned keys
 
-Inspect the secret-key objects in the test token:
+Inspect the AES secret-key objects:
 
 ```bash
 pkcs11-tool \
@@ -230,10 +271,43 @@ ID:    11
 Label: paysec-aes-nist-128
 ```
 
-Because the keys are provisioned as sensitive, `pkcs11-tool` may report
-`CKR_ATTRIBUTE_SENSITIVE` when attempting to read the key value. This is
-expected and does not prevent the key from being used for cryptographic
-operations.
+Because the AES keys are provisioned as sensitive, `pkcs11-tool` may
+report `CKR_ATTRIBUTE_SENSITIVE` when attempting to read their values.
+This is expected and does not prevent the keys from being used for
+cryptographic operations.
+
+Inspect the RSA public key:
+
+```bash
+pkcs11-tool \
+    --module "$PAYSEC_PKCS11_MODULE" \
+    --token-label "$PAYSEC_PKCS11_TOKEN_LABEL" \
+    --pin env:PAYSEC_PKCS11_USER_PIN \
+    --list-objects \
+    --type pubkey
+```
+
+Inspect the RSA private key:
+
+```bash
+pkcs11-tool \
+    --module "$PAYSEC_PKCS11_MODULE" \
+    --token-label "$PAYSEC_PKCS11_TOKEN_LABEL" \
+    --pin env:PAYSEC_PKCS11_USER_PIN \
+    --list-objects \
+    --type privkey
+```
+
+Both RSA objects should have:
+
+```text
+ID:    20
+Label: paysec-rsa-2048
+```
+
+The private key value is not readable from the token. Cryptographic
+operations using the private key are performed inside the PKCS #11
+implementation.
 
 Provisioning is deliberately not performed by the Rust integration
 tests. A production PKCS #11 application may not have permission to
@@ -264,5 +338,25 @@ resolves the provisioned key both by PKCS #11 object ID and by label.
 The AES-CBC test checks a multi-block known-answer vector using the
 separately provisioned NIST AES-128 key.
 
+The AES-CMAC test checks an RFC 4493 known-answer vector using the same
+NIST AES-128 key.
+
+The RSA PKCS#1 v1.5 SHA-256 tests sign using the token's private RSA key
+and verify using the corresponding public key object. A negative test
+also verifies that a signature is rejected when the signed message is
+modified.
+
 The integration tests are run serially because PKCS #11 module and
 session lifecycle management is currently intentionally simple.
+
+### RSA-OAEP-SHA256
+
+`paysec-crypto-pkcs11` implements `RsaOaepSha256Encrypt` using
+`CKM_RSA_PKCS_OAEP` with SHA-256 and MGF1-SHA256.
+
+SoftHSM currently restricts `CKM_RSA_PKCS_OAEP` to SHA-1 and
+MGF1-SHA1. It therefore cannot be used to exercise the
+`RsaOaepSha256Encrypt` integration test.
+
+The RSA key pair is still provisioned for RSA integration testing and
+can be reused by the RSA signature tests.

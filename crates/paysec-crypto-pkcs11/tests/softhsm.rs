@@ -1,11 +1,14 @@
 use std::env;
 
-use paysec_crypto::{AesBlockCipher, AesCbc, AesCmac};
+use paysec_crypto::{
+    AesBlockCipher, AesCbc, AesCmac, RsaPkcs1v15Sha256Sign, RsaPkcs1v15Sha256Verify,
+};
 use paysec_crypto_pkcs11::{Pkcs11Auth, Pkcs11Config, Pkcs11Key, Pkcs11Provider, TokenSelector};
 
 const AES_KEY_ID: [u8; 1] = [0x10];
 const AES_KEY_LABEL: &str = "paysec-aes-128";
 const AES_NIST_KEY_ID: [u8; 1] = [0x11];
+const RSA_KEY_ID: [u8; 1] = [0x20];
 
 fn provider_from_env() -> Pkcs11Provider {
     let module_path = env::var("PAYSEC_PKCS11_MODULE").expect("PAYSEC_PKCS11_MODULE must be set");
@@ -152,4 +155,40 @@ fn aes_cbc_rejects_non_block_aligned_input() {
         error.to_string(),
         "AES-CBC plaintext length must be a multiple of 16 bytes"
     );
+}
+
+#[test]
+#[ignore = "requires a provisioned SoftHSM token; see tests/README.md"]
+fn rsa_pkcs1v15_sha256_sign_and_verify() {
+    let provider = provider_from_env();
+
+    let key = Pkcs11Key::by_id(RSA_KEY_ID);
+    let message = b"TR-34 test message";
+
+    let signature = provider
+        .sign_pkcs1v15_sha256(&key, message)
+        .expect("RSA-PKCS1-v1_5-SHA256 signing failed");
+
+    // RSA-2048 signatures are exactly 256 bytes.
+    assert_eq!(signature.len(), 256);
+
+    provider
+        .verify_pkcs1v15_sha256(&key, message, &signature)
+        .expect("RSA-PKCS1-v1_5-SHA256 verification failed");
+}
+
+#[test]
+#[ignore = "requires a provisioned SoftHSM token; see tests/README.md"]
+fn rsa_pkcs1v15_sha256_rejects_modified_message() {
+    let provider = provider_from_env();
+
+    let key = Pkcs11Key::by_id(RSA_KEY_ID);
+
+    let signature = provider
+        .sign_pkcs1v15_sha256(&key, b"original message")
+        .expect("RSA-PKCS1-v1_5-SHA256 signing failed");
+
+    let result = provider.verify_pkcs1v15_sha256(&key, b"modified message", &signature);
+
+    assert!(result.is_err());
 }
