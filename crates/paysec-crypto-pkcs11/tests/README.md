@@ -107,10 +107,33 @@ The available tokens can be inspected with:
 softhsm2-util --show-slots
 ```
 
-## Provision the AES test key
+## Provision the AES test keys
 
-The AES block-cipher integration test uses a fixed AES-128 key so that
-the result can be checked against a known-answer vector.
+The integration tests use fixed AES-128 keys so that cryptographic
+results can be checked against published known-answer vectors.
+
+The test token contains the following AES keys:
+
+```text
+ID:    10
+Label: paysec-aes-128
+Usage: AES block-cipher known-answer test
+
+ID:    11
+Label: paysec-aes-nist-128
+Usage: AES-CBC and AES-CMAC known-answer tests
+```
+
+Provisioning is deliberately performed outside the Rust integration
+tests.
+
+### AES block-cipher test key
+
+The AES block-cipher test uses the following AES-128 key:
+
+```text
+000102030405060708090a0b0c0d0e0f
+```
 
 Create the temporary key file:
 
@@ -142,7 +165,50 @@ Remove the temporary clear-key file:
 rm /tmp/paysec-aes-128.bin
 ```
 
-Inspect the provisioned object:
+### AES NIST test key
+
+The AES-CBC integration test uses the following AES-128 key:
+
+```text
+2b7e151628aed2a6abf7158809cf4f3c
+```
+
+This key is also used by the AES-CMAC known-answer vectors and can
+therefore be reused by the CMAC integration tests.
+
+Create the temporary key file:
+
+```bash
+printf '\x2b\x7e\x15\x16\x28\xae\xd2\xa6\xab\xf7\x15\x88\x09\xcf\x4f\x3c' \
+    > /tmp/paysec-aes-nist-128.bin
+```
+
+Import it into the token:
+
+```bash
+pkcs11-tool \
+    --module "$PAYSEC_PKCS11_MODULE" \
+    --token-label "$PAYSEC_PKCS11_TOKEN_LABEL" \
+    --pin env:PAYSEC_PKCS11_USER_PIN \
+    --write-object /tmp/paysec-aes-nist-128.bin \
+    --type secrkey \
+    --key-type AES:16 \
+    --id 11 \
+    --label "paysec-aes-nist-128" \
+    --usage-decrypt \
+    --private \
+    --sensitive
+```
+
+Remove the temporary clear-key file:
+
+```bash
+rm /tmp/paysec-aes-nist-128.bin
+```
+
+## Inspect the provisioned keys
+
+Inspect the secret-key objects in the test token:
 
 ```bash
 pkcs11-tool \
@@ -153,19 +219,27 @@ pkcs11-tool \
     --type secrkey
 ```
 
-The token should contain an AES secret key with:
+The token should contain both AES keys:
 
 ```text
 ID:    10
 Label: paysec-aes-128
+
+ID:    11
+Label: paysec-aes-nist-128
 ```
 
+Because the keys are provisioned as sensitive, `pkcs11-tool` may report
+`CKR_ATTRIBUTE_SENSITIVE` when attempting to read the key value. This is
+expected and does not prevent the key from being used for cryptographic
+operations.
+
 Provisioning is deliberately not performed by the Rust integration
-test. A production PKCS #11 application may not have permission to
+tests. A production PKCS #11 application may not have permission to
 create, import, modify, or delete key objects, and
 `paysec-crypto-pkcs11` follows that operational model.
 
-## Run the integration test
+## Run the integration tests
 
 Normal crate tests do not require SoftHSM:
 
@@ -173,7 +247,7 @@ Normal crate tests do not require SoftHSM:
 cargo test -p paysec-crypto-pkcs11
 ```
 
-After loading the integration-test environment, run the SoftHSM test
+After loading the integration-test environment, run the SoftHSM tests
 explicitly:
 
 ```bash
@@ -183,8 +257,11 @@ cargo test \
     -- --ignored --test-threads=1
 ```
 
-The AES test checks the fixed AES-128 known-answer vector and resolves
-the provisioned key both by PKCS #11 object ID and by label.
+The AES block-cipher test checks a fixed AES-128 known-answer vector and
+resolves the provisioned key both by PKCS #11 object ID and by label.
+
+The AES-CBC test checks a multi-block known-answer vector using the
+separately provisioned NIST AES-128 key.
 
 The integration tests are run serially because PKCS #11 module and
 session lifecycle management is currently intentionally simple.
