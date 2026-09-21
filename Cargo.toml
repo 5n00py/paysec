@@ -4,9 +4,10 @@ members = [
     "crates/paysec-crypto",
     "crates/paysec-crypto-soft-aes",
     "crates/paysec-crypto-rustcrypto",
+    "crates/paysec-crypto-pkcs11",
     "crates/paysec-pinblock",
     "crates/paysec-keyblock",
-	"crates/paysec-dukpt",
+    "crates/paysec-dukpt",
     "crates/paysec-tr34"
 ]
 resolver = "3"
@@ -40,9 +41,12 @@ x509-cert = { version = "0.2.5", default-features = false, features = ["std"] }
 pkcs1 = { version = "0.7.5", default-features = false, features = ["std"] }
 spki = { version = "0.7.3", default-features = false, features = ["std"] }
 
+cryptoki = "0.12.1"
+
 paysec-crypto = { version = "0.3.0", path = "crates/paysec-crypto" }
 paysec-crypto-soft-aes = { version = "0.3.0", path = "crates/paysec-crypto-soft-aes" }
 paysec-crypto-rustcrypto = { version = "0.3.0", path = "crates/paysec-crypto-rustcrypto" }
+paysec-crypto-pkcs11 = { version = "0.1.0", path = "crates/paysec-crypto-pkcs11" }
 
 paysec-pinblock = { version = "0.3.0", path = "crates/paysec-pinblock" }
 paysec-keyblock = { version = "0.3.0", path = "crates/paysec-keyblock" }
