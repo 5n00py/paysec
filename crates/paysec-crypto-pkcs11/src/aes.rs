@@ -1,6 +1,6 @@
 use cryptoki::mechanism::Mechanism;
 use cryptoki::object::{KeyType, ObjectClass};
-use paysec_crypto::{AesBlockCipher, AesCbc};
+use paysec_crypto::{AesBlockCipher, AesCbc, AesCmac};
 
 use crate::object::resolve_key;
 use crate::{Pkcs11Error, Pkcs11Key, Pkcs11Provider};
@@ -85,6 +85,26 @@ impl AesCbc<Pkcs11Key> for Pkcs11Provider {
             session
                 .decrypt(&Mechanism::AesCbc(*iv), key, ciphertext)
                 .map_err(|error| Pkcs11Error::cryptoki("failed to decrypt AES-CBC data", error))
+        })
+    }
+}
+
+impl AesCmac<Pkcs11Key> for Pkcs11Provider {
+    fn calculate_cmac(&self, key: &Pkcs11Key, message: &[u8]) -> Result<[u8; 16], Self::Error> {
+        self.with_session(|session| {
+            let key = resolve_key(session, key, ObjectClass::SECRET_KEY, KeyType::AES)?;
+
+            let mac = session
+                .sign(&Mechanism::AesCMac, key, message)
+                .map_err(|error| Pkcs11Error::cryptoki("failed to calculate AES-CMAC", error))?;
+
+            let mac_len = mac.len();
+
+            mac.as_slice().try_into().map_err(|_| {
+                Pkcs11Error::new(format!(
+                    "PKCS #11 AES-CMAC returned {mac_len} bytes; expected 16"
+                ))
+            })
         })
     }
 }

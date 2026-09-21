@@ -1,6 +1,6 @@
 use std::env;
 
-use paysec_crypto::{AesBlockCipher, AesCbc};
+use paysec_crypto::{AesBlockCipher, AesCbc, AesCmac};
 use paysec_crypto_pkcs11::{Pkcs11Auth, Pkcs11Config, Pkcs11Key, Pkcs11Provider, TokenSelector};
 
 const AES_KEY_ID: [u8; 1] = [0x10];
@@ -94,4 +94,28 @@ fn aes_cbc_matches_known_answer_vector() {
         .expect("AES-CBC decryption failed");
 
     assert_eq!(decrypted, plaintext);
+}
+
+#[test]
+#[ignore = "requires a provisioned SoftHSM token; see tests/README.md"]
+fn aes_cmac_matches_rfc_4493_known_answer_vector() {
+    let provider = provider_from_env();
+
+    let key = Pkcs11Key::by_id(AES_NIST_KEY_ID);
+
+    let message = [
+        0x6b, 0xc1, 0xbe, 0xe2, 0x2e, 0x40, 0x9f, 0x96, 0xe9, 0x3d, 0x7e, 0x11, 0x73, 0x93, 0x17,
+        0x2a,
+    ];
+
+    let expected = [
+        0x07, 0x0a, 0x16, 0xb4, 0x6b, 0x4d, 0x41, 0x44, 0xf7, 0x9b, 0xdd, 0x9d, 0xd0, 0x4a, 0x28,
+        0x7c,
+    ];
+
+    let mac = provider
+        .calculate_cmac(&key, &message)
+        .expect("AES-CMAC calculation failed");
+
+    assert_eq!(mac, expected);
 }

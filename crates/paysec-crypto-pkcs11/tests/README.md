@@ -196,6 +196,7 @@ pkcs11-tool \
     --id 11 \
     --label "paysec-aes-nist-128" \
     --usage-decrypt \
+    --usage-sign \
     --private \
     --sensitive
 ```
