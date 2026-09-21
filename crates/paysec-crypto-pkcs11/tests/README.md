@@ -4,12 +4,17 @@ The integration tests in this directory exercise `paysec-crypto-pkcs11`
 against a real PKCS #11 implementation.
 
 They use SoftHSM2 as a software-backed PKCS #11 token. Token
-initialization and key provisioning are intentionally performed outside
-the `paysec-crypto-pkcs11` crate. The provider only connects to an
+initialization and persistent key provisioning are intentionally performed
+outside the `paysec-crypto-pkcs11` crate. The provider connects to an
 existing token and uses already-provisioned key objects.
 
-The tests are ignored by default and therefore do not require SoftHSM
-for a normal `cargo test` run.
+Some tests also exercise temporary PKCS #11 session objects created by the
+provider from host-resident ephemeral AES key material. These objects are
+non-persistent and are destroyed immediately after the cryptographic
+operation.
+
+The SoftHSM tests are ignored by default and therefore do not require
+SoftHSM for a normal `cargo test` run.
 
 ## Prerequisites
 
@@ -36,7 +41,7 @@ dpkg -L libsofthsm2 | grep '/libsofthsm2\.so$'
 This setup keeps the development token store under the user's home
 directory.
 
-Create the token directory:
+Create the token and configuration directories:
 
 ```bash
 mkdir -p "$HOME/.local/share/softhsm2/tokens"
@@ -112,7 +117,7 @@ softhsm2-util --show-slots
 The integration tests use fixed AES-128 keys so that cryptographic
 results can be checked against published known-answer vectors.
 
-The test token contains the following AES keys:
+The test token contains the following persistent AES keys:
 
 ```text
 ID:    10
@@ -124,8 +129,8 @@ Label: paysec-aes-nist-128
 Usage: AES-CBC and AES-CMAC known-answer tests
 ```
 
-Provisioning is deliberately performed outside the Rust integration
-tests.
+Persistent provisioning is deliberately performed outside the Rust
+integration tests.
 
 ### AES block-cipher test key
 
@@ -261,7 +266,7 @@ pkcs11-tool \
     --type secrkey
 ```
 
-The token should contain both AES keys:
+The token should contain both persistent AES keys:
 
 ```text
 ID:    10
@@ -309,18 +314,27 @@ The private key value is not readable from the token. Cryptographic
 operations using the private key are performed inside the PKCS #11
 implementation.
 
-Provisioning is deliberately not performed by the Rust integration
-tests. A production PKCS #11 application may not have permission to
-create, import, modify, or delete key objects, and
-`paysec-crypto-pkcs11` follows that operational model.
+Persistent provisioning is deliberately not performed by the Rust
+integration tests. A production PKCS #11 application may not have
+permission to create, import, modify, or delete persistent key objects,
+and `paysec-crypto-pkcs11` follows that operational model.
 
-## Run the integration tests
+Temporary session objects created internally for ephemeral AES
+operations are a separate mechanism. They use `CKA_TOKEN = false`,
+exist only for the operation, and are destroyed immediately afterward.
+
+## Run the tests
 
 Normal crate tests do not require SoftHSM:
 
 ```bash
 cargo test -p paysec-crypto-pkcs11
 ```
+
+This also compiles the TR-34 compatibility test. That test does not
+connect to SoftHSM; compilation itself verifies that `Pkcs11Provider`
+satisfies the cryptographic trait requirements of the current
+`paysec-tr34` API.
 
 After loading the integration-test environment, run the SoftHSM tests
 explicitly:
@@ -332,31 +346,70 @@ cargo test \
     -- --ignored --test-threads=1
 ```
 
-The AES block-cipher test checks a fixed AES-128 known-answer vector and
-resolves the provisioned key both by PKCS #11 object ID and by label.
+The SoftHSM integration suite covers:
 
-The AES-CBC test checks a multi-block known-answer vector using the
-separately provisioned NIST AES-128 key.
+* AES block encryption and decryption using a known-answer vector
+* AES-CBC using a persistent NIST AES-128 key
+* AES-CBC using a host-resident key imported as a temporary session object
+* AES-CMAC using an RFC 4493 known-answer vector
+* random-byte generation using the token RNG
+* missing-key handling
+* rejection of non-block-aligned AES-CBC input
+* RSA PKCS#1 v1.5 SHA-256 signing and verification
+* rejection of a signature when the signed message is modified
 
-The AES-CMAC test checks an RFC 4493 known-answer vector using the same
-NIST AES-128 key.
+The temporary AES-key test does not require an additional provisioned
+object. The provider creates a non-persistent AES session object from the
+test key, performs the CBC operation, and destroys the object before the
+operation completes.
 
-The RSA PKCS#1 v1.5 SHA-256 tests sign using the token's private RSA key
-and verify using the corresponding public key object. A negative test
-also verifies that a signature is rejected when the signed message is
-modified.
+The random-byte test does not require a key object; it exercises the
+token's `C_GenerateRandom` capability directly.
 
 The integration tests are run serially because PKCS #11 module and
 session lifecycle management is currently intentionally simple.
 
-### RSA-OAEP-SHA256
+## TR-34 compatibility
+
+`paysec-crypto-pkcs11` satisfies the cryptographic provider requirements
+of the current TR-34 two-pass key-export implementation:
+
+```text
+RandomBytes
+AesCbc<[u8]>
+RsaOaepSha256Encrypt<Pkcs11Key>
+RsaPkcs1v15Sha256Sign<Pkcs11Key>
+```
+
+The `tr34_compile.rs` integration test verifies this against the actual
+`paysec-tr34` public API at compile time.
+
+An end-to-end TR-34 SoftHSM test is not currently possible because of the
+RSA-OAEP limitation described below.
+
+## RSA-OAEP-SHA256 limitation
 
 `paysec-crypto-pkcs11` implements `RsaOaepSha256Encrypt` using
-`CKM_RSA_PKCS_OAEP` with SHA-256 and MGF1-SHA256.
+`CKM_RSA_PKCS_OAEP` with:
 
-SoftHSM currently restricts `CKM_RSA_PKCS_OAEP` to SHA-1 and
-MGF1-SHA1. It therefore cannot be used to exercise the
-`RsaOaepSha256Encrypt` integration test.
+```text
+OAEP hash: SHA-256
+MGF:       MGF1-SHA256
+Label:     empty
+```
 
-The RSA key pair is still provisioned for RSA integration testing and
-can be reused by the RSA signature tests.
+The SoftHSM implementation used by this test environment restricts
+`CKM_RSA_PKCS_OAEP` to SHA-1 and MGF1-SHA1.
+
+SoftHSM therefore cannot exercise the `RsaOaepSha256Encrypt`
+implementation or run the complete TR-34 flow.
+
+The provider implementation is intentionally not weakened to SHA-1 to
+accommodate SoftHSM, because that would violate the
+`RsaOaepSha256Encrypt` contract defined by `paysec-crypto`.
+
+The RSA key pair remains useful for the RSA PKCS#1 v1.5 SHA-256 signing
+and verification integration tests.
+
+A PKCS #11 HSM supporting the required SHA-256 OAEP parameter profile
+can use the same provider implementation without changes.
